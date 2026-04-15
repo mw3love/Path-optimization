@@ -7,8 +7,9 @@ let _locations = [];
 let _state = null;
 let _callbacks = null;
 
-// 현재 활성 시군구 필터 집합 (비어 있으면 전체 표시)
+// 현재 표시할 시군구 집합 (비어 있으면 전체 숨김, 전체 포함이면 전체 표시)
 const _activeFilters = new Set();
+let _allSigungu = [];
 let _searchQuery = "";
 
 export function initSelection(locations, state, callbacks) {
@@ -27,14 +28,25 @@ export function initSelection(locations, state, callbacks) {
 // ── 시군구 필터 ───────────────────────────────────────────────────────────────
 
 function _buildFilters() {
-  const sggs = [...new Set(_locations.map((l) => l.sigungu))].sort();
+  _allSigungu = [...new Set(_locations.map((l) => l.sigungu))].sort();
+  // 초기 상태: 전체 표시
+  _allSigungu.forEach((sgg) => _activeFilters.add(sgg));
 
   ["sigungu-filters", "sigungu-filters-m"].forEach((containerId) => {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = "";
 
-    for (const sgg of sggs) {
+    // "전체" 배지 (다른 시군구 배지와 동일한 스타일)
+    const allBadge = document.createElement("span");
+    allBadge.className = "sigungu-badge sgg-all-badge";
+    allBadge.textContent = "전체";
+    allBadge.style.background = "#6c757d";
+    allBadge.title = "전체 지역 토글";
+    allBadge.addEventListener("click", _toggleAllSigungu);
+    container.appendChild(allBadge);
+
+    for (const sgg of _allSigungu) {
       const badge = document.createElement("span");
       badge.className = "sigungu-badge";
       badge.textContent = sgg;
@@ -45,6 +57,18 @@ function _buildFilters() {
       badge.addEventListener("click", () => _toggleFilter(sgg));
       container.appendChild(badge);
     }
+  });
+
+  // 장소 전체선택 체크박스
+  ["cb-select-all", "cb-select-all-m"].forEach((id) => {
+    const cb = document.getElementById(id);
+    if (!cb) return;
+    cb.addEventListener("change", () => {
+      const shouldSelect = cb.checked;
+      cb.blur();
+      const visible = _visibleLocations();
+      visible.forEach((loc) => _setSelected(loc.id, shouldSelect));
+    });
   });
 }
 
@@ -58,11 +82,26 @@ function _toggleFilter(sgg) {
   _renderList();
 }
 
+function _toggleAllSigungu() {
+  const allActive = _allSigungu.every((sgg) => _activeFilters.has(sgg));
+  if (allActive) {
+    _activeFilters.clear();
+  } else {
+    _allSigungu.forEach((sgg) => _activeFilters.add(sgg));
+  }
+  _updateFilterBadges();
+  _renderList();
+}
+
 function _updateFilterBadges() {
-  document.querySelectorAll(".sigungu-badge").forEach((badge) => {
-    const sgg = badge.dataset.sgg;
-    const active = _activeFilters.size === 0 || _activeFilters.has(sgg);
-    badge.classList.toggle("inactive", !active);
+  // 개별 시군구 배지
+  document.querySelectorAll(".sigungu-badge:not(.sgg-all-badge)").forEach((badge) => {
+    badge.classList.toggle("inactive", !_activeFilters.has(badge.dataset.sgg));
+  });
+  // "전체" 배지: 모두 활성일 때만 활성
+  const allActive = _allSigungu.every((sgg) => _activeFilters.has(sgg));
+  document.querySelectorAll(".sgg-all-badge").forEach((badge) => {
+    badge.classList.toggle("inactive", !allActive);
   });
 }
 
@@ -87,7 +126,7 @@ function _buildList() {
 
 function _visibleLocations() {
   return _locations.filter((loc) => {
-    if (_activeFilters.size > 0 && !_activeFilters.has(loc.sigungu)) return false;
+    if (!_activeFilters.has(loc.sigungu)) return false;
     if (_searchQuery) {
       const haystack = (loc.name + " " + loc.address + " " + loc.sigungu).toLowerCase();
       if (!haystack.includes(_searchQuery)) return false;
@@ -109,6 +148,8 @@ function _renderList() {
       container.appendChild(item);
     }
   });
+
+  _syncSelectAllCheckbox();
 }
 
 function _createListItem(loc) {
@@ -171,6 +212,26 @@ function _setSelected(id, selected) {
   setMarkerSelected(id, selected);
   _syncListHighlight(id, selected);
   _callbacks.updateSelectionSummary();
+  _syncSelectAllCheckbox();
+}
+
+function _syncSelectAllCheckbox() {
+  const visible = _visibleLocations();
+  const selectedCount = visible.filter((loc) => _state.selected.has(loc.id)).length;
+  ["cb-select-all", "cb-select-all-m"].forEach((id) => {
+    const cb = document.getElementById(id);
+    if (!cb) return;
+    if (visible.length === 0 || selectedCount === 0) {
+      cb.checked = false;
+      cb.indeterminate = false;
+    } else if (selectedCount === visible.length) {
+      cb.checked = true;
+      cb.indeterminate = false;
+    } else {
+      cb.checked = false;
+      cb.indeterminate = true;
+    }
+  });
 }
 
 function _syncListHighlight(id, selected) {
@@ -181,15 +242,27 @@ function _syncListHighlight(id, selected) {
   });
 }
 
+// 전체 선택 해제
+export function clearSelection() {
+  for (const id of [..._state.selected]) {
+    _setSelected(id, false);
+  }
+  _searchQuery = "";
+  ["location-search", "location-search-m"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+}
+
 // 마커 클릭 → 체크박스 토글 (map.js 에서 호출)
 export function toggleById(id) {
   const selected = !_state.selected.has(id);
   _setSelected(id, selected);
 
-  // 해당 항목이 목록에 없으면(필터됨) 필터 해제
+  // 해당 항목이 목록에 없으면(필터됨) 전체 지역 표시로 복원
   const loc = _locations.find((l) => l.id === id);
-  if (loc && _activeFilters.size > 0 && !_activeFilters.has(loc.sigungu)) {
-    _activeFilters.clear();
+  if (loc && !_activeFilters.has(loc.sigungu)) {
+    _allSigungu.forEach((sgg) => _activeFilters.add(sgg));
     _updateFilterBadges();
     _renderList();
   }

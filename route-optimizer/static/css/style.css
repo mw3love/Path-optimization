@@ -46,6 +46,16 @@ html, body {
   flex-shrink: 0;
 }
 
+#cb-select-all,
+#cb-select-all-m,
+#cb-select-all:focus,
+#cb-select-all-m:focus,
+#cb-select-all:focus-visible,
+#cb-select-all-m:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 .location-item .loc-name {
   font-weight: 500;
   white-space: nowrap;
@@ -164,6 +174,16 @@ html, body {
   padding: 4px 8px;
   font-size: 0.8rem;
   margin-bottom: 8px;
+}
+
+.timeline-banner-osrm {
+  background: #e8f4fd;
+  border: 1px solid #90caf9;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+  color: #1565c0;
 }
 
 /* ── 번호 DivIcon 마커 ────────────────────────────────────── */

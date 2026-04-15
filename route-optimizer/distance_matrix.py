@@ -28,11 +28,10 @@ def get_matrix(coords: list[tuple], keys: list[str]) -> dict:
     keys:   [str, ...] — 캐시 키. 좌표와 1:1 대응.
 
     전략:
-    1. 모든 쌍이 캐시에 있으면 즉시 반환 (source="osrm" 또는 이전 source 유지)
-    2. __start__ / __end__ 를 포함하는 쌍이 없는 경우에만:
-       - location-to-location 쌍 중 미캐시 항목 → OSRM 호출
-    3. __start__ / __end__ 관련 쌍은 항상 Haversine 폴백 사용
-       (커스텀 위치는 prefetch 대상이 아니므로 OSRM 재호출 없음)
+    1. real-to-real 쌍 중 캐시 미스 → OSRM Table 호출해 캐시
+    2. virtual(__start__/__end__) 관련 캐시는 매 요청마다 무효화 (위치가 바뀜)
+    3. virtual 관련 쌍은 OSRM Table로 가져옴 (real-to-real과 동일 기준)
+       OSRM 실패 시 Haversine × 1.4 폴백
     """
     n = len(coords)
     if n == 0:
@@ -53,12 +52,14 @@ def get_matrix(coords: list[tuple], keys: list[str]) -> dict:
     else:
         source = "osrm" if real_keys else "haversine"
 
-    # virtual 키 관련 쌍은 Haversine 으로 채움
+    # virtual 키 관련 캐시 무효화 — 요청마다 출발지/도착지가 바뀔 수 있음
+    _invalidate_virtual_cache()
+
+    # virtual 키 관련 쌍은 OSRM으로 채우고, 실패 시 Haversine 폴백
     if virtual_indices:
-        _fill_virtual_haversine(coords, keys, virtual_indices, real_indices)
-        # virtual 포함 시 source는 osrm 캐시가 있어도 "osrm" 유지
-        # (real-to-real은 OSRM, virtual rows는 Haversine 혼용)
-        # frontend에는 haversine 로 표기하지 않음 — real pairs가 OSRM이면 osrm 유지
+        source = _fill_virtual_osrm_or_haversine(
+            coords, keys, virtual_indices, real_indices, source
+        )
 
     return _build_matrix(keys, source)
 
@@ -123,7 +124,42 @@ def _fetch_osrm(coords: list[tuple], keys: list[str]) -> str:
     return "osrm"
 
 
-# ── Virtual 키 Haversine 채움 ────────────────────────────────────────────────
+# ── Virtual 키 처리 ──────────────────────────────────────────────────────────
+
+_VIRTUAL_KEYS = {"__start__", "__end__"}
+
+
+def _invalidate_virtual_cache():
+    """출발지/도착지 관련 캐시를 제거한다. 매 요청마다 위치가 바뀔 수 있으므로."""
+    stale = [k for k in CACHE if k[0] in _VIRTUAL_KEYS or k[1] in _VIRTUAL_KEYS]
+    for k in stale:
+        del CACHE[k]
+
+
+def _fill_virtual_osrm_or_haversine(
+    coords: list[tuple],
+    keys: list[str],
+    virtual_indices: list[int],
+    real_indices: list[int],
+    current_source: str,
+) -> str:
+    """virtual 키와 실제 지점 간 거리를 OSRM으로 가져온다. 실패 시 Haversine 폴백.
+
+    OSRM 호출 시 virtual + real 좌표를 함께 넘겨 한 번에 행렬을 얻는다.
+    real-to-real 쌍은 이미 캐시돼 있으므로 덮어써도 무방(동일한 OSRM 값).
+    """
+    all_idx = virtual_indices + real_indices
+    sub_coords = [coords[i] for i in all_idx]
+    sub_keys = [keys[i] for i in all_idx]
+    try:
+        _fetch_osrm(sub_coords, sub_keys)
+        return current_source  # real-to-real source 유지
+    except Exception:
+        _fill_virtual_haversine(coords, keys, virtual_indices, real_indices)
+        return "haversine"
+
+
+# ── Virtual 키 Haversine 채움 (폴백용) ───────────────────────────────────────
 
 def _fill_virtual_haversine(
     coords: list[tuple],
@@ -161,6 +197,34 @@ def _haversine_m(lat1, lng1, lat2, lng2) -> float:
     dlam = math.radians(lng2 - lng1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def fetch_route_geometry(coords: list[tuple]) -> list[list] | None:
+    """
+    OSRM Route API로 실제 도로 경로 좌표를 반환한다.
+    coords: [(lat, lng), ...] — 전체 경로 순서(출발→경유→도착)
+    반환: [[lat, lng], ...] (Leaflet용) | None (실패 시)
+    """
+    if len(coords) < 2:
+        return None
+    try:
+        coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
+        url = (
+            f"{OSRM_BASE_URL}/route/v1/driving/{coord_str}"
+            "?overview=full&geometries=geojson"
+        )
+        resp = requests.get(url, timeout=OSRM_TIMEOUT)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        if data.get("code") != "Ok" or not data.get("routes"):
+            return None
+        # GeoJSON 좌표는 [lng, lat] → Leaflet용 [lat, lng]으로 변환
+        geo = data["routes"][0]["geometry"]["coordinates"]
+        return [[lat, lng] for lng, lat in geo]
+    except Exception as e:
+        print(f"[fetch_route_geometry] 실패: {e}")
+        return None
 
 
 def _fallback_haversine(coords: list[tuple], keys: list[str]) -> str:

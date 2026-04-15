@@ -35,10 +35,14 @@ function _buildTimelineHtml(data, locations) {
 
   let html = "";
 
-  // 근사치 배너
+  // 거리 계산 기준 배너
   if (isApprox) {
     html += `<div class="timeline-banner-approx">
-      ⚠️ <strong>거리 근사치</strong> — OSRM 연결 불가, Haversine×1.4 사용
+      ⚠️ <strong>직선 거리×1.4 추정</strong> — 인터넷 연결 불가 시 GPS 직선 거리에 1.4배를 곱해 도로 거리를 추정합니다. 실제 이동 시간과 다를 수 있습니다.
+    </div>`;
+  } else {
+    html += `<div class="timeline-banner-osrm">
+      🛣️ <strong>실제 도로 기준</strong> — 실제 도로망을 분석해 계산한 자동차 이동 시간·거리입니다.
     </div>`;
   }
 
@@ -107,8 +111,7 @@ function _buildTimelineHtml(data, locations) {
     <td>${data.end ? summary.end_time || "" : ""}</td>
     <td colspan="2">
       이동 ${summary.total_drive_min != null ? summary.total_drive_min + "분" : "—"}
-      / ${summary.total_dist_km != null ? summary.total_dist_km + "km" : "—"}<br/>
-      체류 ${summary.total_stay_min != null ? summary.total_stay_min + "분" : "—"}
+      / ${summary.total_dist_km != null ? summary.total_dist_km + "km" : "—"}
     </td>
   </tr>`;
 

@@ -1,13 +1,14 @@
 /**
- * nav.js — T맵 / 카카오내비 딥링크 빌더
+ * nav.js — T맵 / 네이버지도 딥링크 빌더
  *
  * T맵: tmap://route?startX=lng&startY=lat&...&viaX0=lng&viaY0=lat&...
- * 카카오내비: kakaomap://route?sp=lat,lng&ep=lat,lng&by=CAR&wp=lat,lng...
- *   경유지 제한: 3개까지만 지원 (KAKAO_MAX_WAYPOINTS)
+ *   경유지 제한: 없음 (T맵 앱 기본 지원)
+ * 네이버지도: nmap://route/car?slat=&slng=&sname=&dlat=&dlng=&dname=&waypoints=lat,lng|...&v=3
+ *   경유지 제한: 5개까지 지원 (NAVER_MAX_WAYPOINTS)
  * 데스크톱 폴백: T맵 웹 길찾기 URL
  */
 
-const KAKAO_MAX_WAYPOINTS = 3;
+const NAVER_MAX_WAYPOINTS = 5;
 
 export function buildNavButtons(data, locations) {
   const order = data.order || [];
@@ -30,7 +31,7 @@ export function buildNavButtons(data, locations) {
   const waypoints = hasEnd ? orderedLocs : orderedLocs.slice(0, -1);
 
   const tmapUrl = _buildTmapUrl(start, dest, waypoints);
-  const kakaoResult = _buildKakaoUrl(start, dest, waypoints);
+  const naverResult = _buildNaverUrl(start, dest, waypoints);
   const webUrl = _buildWebFallbackUrl(start, dest, waypoints);
 
   let html = `<div class="d-flex gap-2 flex-wrap">`;
@@ -43,19 +44,18 @@ export function buildNavButtons(data, locations) {
     🗺️ T맵
   </button>`;
 
-  // 카카오내비 버튼
-  if (kakaoResult.exceeded) {
+  // 네이버지도 버튼
+  if (naverResult.exceeded) {
     html += `<button class="btn btn-sm btn-secondary flex-fill" disabled
-      title="카카오내비 경유지 ${KAKAO_MAX_WAYPOINTS}개 초과 (T맵 권장)">
-      🚕 카카오 (${waypoints.length}개 초과)
+      title="네이버지도 경유지 ${NAVER_MAX_WAYPOINTS}개 초과 (T맵 권장)">
+      🟢 네이버 (${waypoints.length}개 초과)
     </button>`;
   } else {
-    html += `<button class="btn btn-sm btn-warning flex-fill"
-      style="background:#fee500;border-color:#fee500;color:#000;"
-      data-nav-url="${_esc(kakaoResult.url)}"
+    html += `<button class="btn btn-sm btn-success flex-fill"
+      data-nav-url="${_esc(naverResult.url)}"
       data-nav-fallback=""
       onclick="window._openNavLink(this)">
-      🚕 카카오내비
+      🟢 네이버지도
     </button>`;
   }
 
@@ -87,16 +87,20 @@ function _buildTmapUrl(start, dest, waypoints) {
   return `tmap://route?${params.toString()}`;
 }
 
-function _buildKakaoUrl(start, dest, waypoints) {
-  if (waypoints.length > KAKAO_MAX_WAYPOINTS) {
+function _buildNaverUrl(start, dest, waypoints) {
+  if (waypoints.length > NAVER_MAX_WAYPOINTS) {
     return { url: "", exceeded: true };
   }
 
-  let url = `kakaomap://route?sp=${start.lat},${start.lng}` +
-    `&ep=${dest.lat},${dest.lng}&by=CAR`;
+  const sname = encodeURIComponent(start.label || "출발지");
+  const dname = encodeURIComponent(dest.name || dest.label || "도착지");
 
-  for (const loc of waypoints) {
-    url += `&wp=${loc.lat},${loc.lng}`;
+  let url = `nmap://route/car?slat=${start.lat}&slng=${start.lng}&sname=${sname}` +
+    `&dlat=${dest.lat}&dlng=${dest.lng}&dname=${dname}&v=3`;
+
+  if (waypoints.length > 0) {
+    const wpStr = encodeURIComponent(waypoints.map((loc) => `${loc.lat},${loc.lng}`).join("|"));
+    url += `&waypoints=${wpStr}`;
   }
 
   return { url, exceeded: false };
@@ -126,7 +130,7 @@ window._openNavLink = function(btn) {
   // 앱 스킴은 모바일에서만 시도; 데스크톱에서는 바로 웹 URL
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-  if (isMobile && (appUrl.startsWith("tmap://") || appUrl.startsWith("kakaomap://"))) {
+  if (isMobile && (appUrl.startsWith("tmap://") || appUrl.startsWith("nmap://"))) {
     // iframe 방식으로 앱 스킴 시도
     const iframe = document.createElement("iframe");
     iframe.style.display = "none";
@@ -138,7 +142,7 @@ window._openNavLink = function(btn) {
   } else if (webUrl) {
     window.open(webUrl, "_blank", "noopener");
   } else if (!isMobile) {
-    // 데스크톱 + 카카오(webUrl 없음): T맵 웹으로 대체 안내
+    // 데스크톱 + 네이버(webUrl 없음): T맵 웹으로 대체 안내
     alert("T맵 버튼을 사용하거나 스마트폰에서 접속하세요.");
   }
 };

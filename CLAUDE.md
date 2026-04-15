@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-KBS 라디오 전파 측정을 위한 **차량 방문 경로 최적화 단일 페이지 웹앱**. 지도에서 오늘 방문할 지점을 선택 → OR-Tools로 방문 순서 최적화 → 카카오내비/T맵으로 경로 전송.
+KBS 라디오 전파 측정을 위한 **차량 방문 경로 최적화 단일 페이지 웹앱**. 지도에서 오늘 방문할 지점을 선택 → OR-Tools로 방문 순서 최적화 → T맵/네이버지도로 경로 전송.
 
 - 사용 환경: 운영자 본인 PC에서 Flask 실행, 같은 와이파이의 스마트폰에서 접속
 - 배포 단위는 "코드 + `locations.json`" — 다른 지역 팀은 `locations.json`만 교체해서 같은 코드를 돌린다. 따라서 **지역/지점 하드코딩 금지**.
@@ -47,16 +47,18 @@ static/css/style.css
 1. 프론트가 `POST /api/optimize`에 `location_ids[]`, `start{lat,lng,label}`, `end`(nullable), `start_time`, `stay_minutes` 전송.
 2. `distance_matrix`가 필요한 좌표(출발+도착+선택지점)의 duration/distance 행렬을 캐시에서 조회하거나 OSRM Table 호출.
 3. `optimizer`가 depot=출발지로 두고 OR-Tools로 TSP. `end`가 있으면 종단 노드 고정, 없으면 Open TSP.
-4. 응답에 순서(`order`), 구간별 `legs`(drive_min/km, arrive/depart), 합계, `polyline`(OSRM geometry) 포함.
+4. 응답에 순서(`order`), 구간별 `legs`(drive_min/km, arrive/depart), 합계, `polyline`(도로 경로 좌표) 포함.
 
 ### 폴백 규칙
-OSRM 공개 데모 서버(`router.project-osrm.org`) 실패/타임아웃 시 **Haversine × 1.4, 평균 60km/h**로 행렬 생성. 폴백 상황에서도 경로선 렌더를 위해 `polyline`은 빈 값 대신 직선 좌표 배열 등 프론트가 처리할 수 있는 형태로 내려줘야 한다.
+- **거리/시간 행렬**: OSRM Table API 실패 시 Haversine × 1.4, 평균 60km/h 추정.
+- **경로선(polyline)**: `distance_matrix.fetch_route_geometry()`가 OSRM Route API(`/route/v1/driving/...?overview=full&geometries=geojson`)로 실제 도로 좌표를 가져옴. Route API 실패 시 직선 좌표 배열로 폴백. 어떤 경우에도 `polyline`은 빈 값 대신 프론트가 처리할 수 있는 형태로 반환.
+- `source` 필드: `"osrm"` | `"haversine"` — 타임라인 배너로 사용자에게 표시.
 
 ### 프론트 규약
 - 지도: Leaflet + OSM 타일. 지점은 CircleMarker, **시군구별 색상은 `address` 문자열에서 자동 추출**(예: "전북 고창군 …" → "고창군").
 - 마커 ↔ 사이드바 체크박스는 양방향 동기화.
 - 결과 마커는 번호 DivIcon(①②③…).
-- 내비 딥링크: T맵 `tmap://route?...&viaX0=…&viaY0=…`, 카카오내비는 다중 경유지 스킴. 데스크톱에서는 웹 길찾기 URL로 폴백.
+- 내비 딥링크: T맵 `tmap://route?...&viaX0=…&viaY0=…` (경유지 제한 없음), 네이버지도 `nmap://route/car?...&waypoints=lat,lng|…` (경유지 최대 5개). 데스크톱에서는 T맵 웹 길찾기 URL로 폴백. 경유지 초과 시 해당 버튼 비활성화.
 
 ## 문서 관리
 

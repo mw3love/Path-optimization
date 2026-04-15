@@ -54,6 +54,11 @@ export function initMap(containerId, locations, onContextMenu) {
     maxZoom: 19,
   }).addTo(map);
 
+  // 좌클릭 (도착지 대기 모드 등)
+  map.on("click", (e) => {
+    _fireMapClick(e.latlng);
+  });
+
   // 우클릭 컨텍스트 메뉴 (데스크톱)
   map.on("contextmenu", (e) => {
     e.originalEvent.preventDefault();
@@ -151,26 +156,28 @@ const _flagIcon = L.divIcon({
   iconAnchor: [11, 22],
 });
 
-export function setOriginMarker(latlng) {
+export function setOriginMarker(latlng, onClear) {
   [_originMarker, _originMarkerM].forEach((m) => m && m.remove());
-  _originMarker = L.marker(latlng, { icon: _starIcon }).addTo(_map)
-    .bindPopup("출발지");
-  _originMarkerM = L.marker(latlng, { icon: _starIcon }).addTo(_mapMobile)
-    .bindPopup("출발지");
+  _originMarker = L.marker(latlng, { icon: _starIcon }).addTo(_map).bindPopup("⭐ 출발지");
+  _originMarkerM = L.marker(latlng, { icon: _starIcon }).addTo(_mapMobile).bindPopup("⭐ 출발지");
 }
 
-export function setDestMarker(latlng) {
+export function setDestMarker(latlng, onClear) {
   [_destMarker, _destMarkerM].forEach((m) => m && m.remove());
-  _destMarker = L.marker(latlng, { icon: _flagIcon }).addTo(_map)
-    .bindPopup("도착지");
-  _destMarkerM = L.marker(latlng, { icon: _flagIcon }).addTo(_mapMobile)
-    .bindPopup("도착지");
+  _destMarker = L.marker(latlng, { icon: _flagIcon }).addTo(_map).bindPopup("🏁 도착지");
+  _destMarkerM = L.marker(latlng, { icon: _flagIcon }).addTo(_mapMobile).bindPopup("🏁 도착지");
 }
 
 export function clearDestMarker() {
   [_destMarker, _destMarkerM].forEach((m) => m && m.remove());
   _destMarker = null;
   _destMarkerM = null;
+}
+
+export function clearOriginMarker() {
+  [_originMarker, _originMarkerM].forEach((m) => m && m.remove());
+  _originMarker = null;
+  _originMarkerM = null;
 }
 
 // ── 결과 마커/경로선 ──────────────────────────────────────────────────────────
@@ -206,13 +213,22 @@ export function drawPolyline(coords) {
 
 // ── 내부 이벤트 ───────────────────────────────────────────────────────────────
 const _markerClickListeners = [];
+const _mapClickListeners = [];
 
 export function onMarkerClick(fn) {
   _markerClickListeners.push(fn);
 }
 
+export function onMapClick(fn) {
+  _mapClickListeners.push(fn);
+}
+
 function _fireMarkerClick(id) {
   _markerClickListeners.forEach((fn) => fn(id));
+}
+
+function _fireMapClick(latlng) {
+  _mapClickListeners.forEach((fn) => fn(latlng));
 }
 
 // ── 롱프레스 (모바일) ─────────────────────────────────────────────────────────

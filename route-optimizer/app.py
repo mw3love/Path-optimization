@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template_string, request
-from distance_matrix import get_matrix
+from distance_matrix import get_matrix, fetch_route_geometry
 from optimizer import solve
 
 app = Flask(__name__)
@@ -153,15 +153,20 @@ def optimize():
 
 
 def _build_polyline(keys, ordered_ids, coords, start, end):
-    """순서대로 좌표 배열 반환 (OSRM geometry 미사용, 직선 연결)."""
-    result = [[start["lat"], start["lng"]]]
+    """OSRM Route API로 실제 도로 경로 좌표 반환. 실패 시 직선 연결 폴백."""
+    route_coords = [(start["lat"], start["lng"])]
     for oid in ordered_ids:
         idx = keys.index(oid)
-        lat, lng = coords[idx]
-        result.append([lat, lng])
+        route_coords.append(coords[idx])
     if end:
-        result.append([end["lat"], end["lng"]])
-    return result
+        route_coords.append((end["lat"], end["lng"]))
+
+    geometry = fetch_route_geometry(route_coords)
+    if geometry:
+        return geometry
+
+    # 폴백: 직선 연결
+    return [[lat, lng] for lat, lng in route_coords]
 
 
 @app.route("/api/health")
@@ -191,6 +196,10 @@ def health():
 # ── 기동 ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import os
     from prefetch import start_prefetch
-    start_prefetch(LOCATIONS)
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    # reloader는 부모(파일 감시)·자식(실제 앱) 2개 프로세스를 띄운다.
+    # WERKZEUG_RUN_MAIN=true 는 자식에서만 설정되므로, prefetch는 자식에서만 실행.
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        start_prefetch(LOCATIONS)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True)

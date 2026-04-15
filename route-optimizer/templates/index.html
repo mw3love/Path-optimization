@@ -46,21 +46,29 @@
       </div>
 
       <!-- 출발지/도착지 표시 -->
-      <div class="small text-muted mb-1">
-        <span id="label-origin">출발지: 미지정 (지도 우클릭)</span>
+      <div class="small text-muted mb-1 d-flex align-items-center gap-1">
+        <span id="label-origin" class="flex-grow-1">출발지: 미지정 (지도 우클릭)</span>
+        <button id="btn-apply-origin-default" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
+        <button id="btn-save-origin-default" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 출발지로 저장" style="font-size:0.7rem;">저장</button>
+        <button id="btn-clear-origin" class="btn btn-link btn-sm p-0 d-none">✕</button>
       </div>
       <div class="small text-muted mb-2 d-flex align-items-center gap-1">
         <span id="label-destination" class="flex-grow-1">도착지: 미지정 (Open TSP)</span>
-        <button id="btn-set-dest" class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:0.7rem;">도착지 설정</button>
+        <button id="btn-apply-dest-default" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
+        <button id="btn-save-dest-default" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 도착지로 저장" style="font-size:0.7rem;">저장</button>
         <button id="btn-clear-dest" class="btn btn-link btn-sm p-0 d-none">✕</button>
       </div>
 
-      <!-- 시군구 필터 -->
+      <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
       <div id="sigungu-filters" class="d-flex flex-wrap gap-1 mb-2"></div>
 
-      <!-- 검색 -->
-      <input type="search" id="location-search" class="form-control form-control-sm"
-        placeholder="지점명·주소 검색" />
+      <!-- 검색 (왼쪽 체크박스 = 전체선택 토글) -->
+      <div class="d-flex gap-2 align-items-center">
+        <input type="checkbox" id="cb-select-all" class="form-check-input flex-shrink-0 mt-0"
+          title="보이는 장소 전체선택/해제" style="width:1.1em;height:1.1em;cursor:pointer;" />
+        <input type="search" id="location-search" class="form-control form-control-sm flex-grow-1"
+          placeholder="지점명·주소 검색" />
+      </div>
     </div>
 
     <!-- 지점 목록 -->
@@ -71,9 +79,14 @@
       <div class="small text-muted mb-1">
         <span id="selection-summary">선택: 0개</span>
       </div>
-      <button id="btn-optimize" class="btn btn-primary w-100" disabled>
-        🔄 최적화
-      </button>
+      <div class="d-flex gap-2">
+        <button id="btn-optimize" class="btn btn-primary flex-grow-1" disabled>
+          🔄 최적화
+        </button>
+        <button id="btn-reset" class="btn btn-outline-secondary flex-grow-1" title="초기화">
+          초기화
+        </button>
+      </div>
     </div>
   </div>
 
@@ -120,22 +133,36 @@
             <button id="btn-gps-m" class="btn btn-sm btn-outline-secondary w-100" title="현재 위치를 출발지로">📍</button>
           </div>
         </div>
-        <div class="small text-muted mb-1">
-          <span id="label-origin-m">출발지: 미지정 (지도 길게누르기)</span>
+        <div class="small text-muted mb-1 d-flex align-items-center gap-1">
+          <span id="label-origin-m" class="flex-grow-1">출발지: 미지정 (지도 길게누르기)</span>
+          <button id="btn-apply-origin-default-m" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
+          <button id="btn-save-origin-default-m" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 출발지로 저장" style="font-size:0.7rem;">저장</button>
+          <button id="btn-clear-origin-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
         <div class="small text-muted mb-2 d-flex align-items-center gap-1">
           <span id="label-destination-m" class="flex-grow-1">도착지: 미지정 (Open TSP)</span>
-          <button id="btn-set-dest-m" class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:0.7rem;">도착지 설정</button>
+          <button id="btn-apply-dest-default-m" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
+          <button id="btn-save-dest-default-m" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 도착지로 저장" style="font-size:0.7rem;">저장</button>
           <button id="btn-clear-dest-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
+        <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
         <div id="sigungu-filters-m" class="d-flex flex-wrap gap-1 mb-2"></div>
-        <input type="search" id="location-search-m" class="form-control form-control-sm"
-          placeholder="지점명·주소 검색" />
+
+        <!-- 검색 (왼쪽 체크박스 = 전체선택 토글) -->
+        <div class="d-flex gap-2 align-items-center">
+          <input type="checkbox" id="cb-select-all-m" class="form-check-input flex-shrink-0 mt-0"
+            title="보이는 장소 전체선택/해제" style="width:1.1em;height:1.1em;cursor:pointer;" />
+          <input type="search" id="location-search-m" class="form-control form-control-sm flex-grow-1"
+            placeholder="지점명·주소 검색" />
+        </div>
       </div>
       <div id="location-list-m" class="flex-grow-1 overflow-auto px-2 py-1"></div>
       <div class="px-3 py-2 border-top">
         <div class="small text-muted mb-1"><span id="selection-summary-m">선택: 0개</span></div>
-        <button id="btn-optimize-m" class="btn btn-primary w-100" disabled>🔄 최적화</button>
+        <div class="d-flex gap-2">
+          <button id="btn-optimize-m" class="btn btn-primary flex-grow-1" disabled>🔄 최적화</button>
+          <button id="btn-reset-m" class="btn btn-outline-secondary flex-grow-1" title="초기화">초기화</button>
+        </div>
       </div>
     </div>
 

@@ -1,9 +1,10 @@
 /**
  * app.js — 엔트리포인트. 모듈 임포트 및 초기화 조율.
  */
-import { initMaps, getSigunguColor, setOriginMarker, setDestMarker,
-         clearDestMarker, onMarkerClick } from "./map.js";
-import { initSelection } from "./selection.js";
+import { initMaps, setOriginMarker, setDestMarker,
+         clearDestMarker, clearOriginMarker, clearResultLayers,
+         onMarkerClick } from "./map.js";
+import { initSelection, clearSelection } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 
 const LOCATIONS = window.LOCATIONS;
@@ -14,6 +15,77 @@ export const state = {
   destination: null,  // { lat, lng, label } | null
   selected: new Set(),
 };
+
+// ── 디폴트 설정 (localStorage) ───────────────────────────────────────────────
+let _defaultOrigin = null;
+let _defaultDestination = null;
+
+function _loadDefaults() {
+  try {
+    const o = localStorage.getItem("route_default_origin");
+    if (o) _defaultOrigin = JSON.parse(o);
+    const d = localStorage.getItem("route_default_dest");
+    if (d) _defaultDestination = JSON.parse(d);
+  } catch (e) {}
+}
+
+function _saveDefaultOrigin() {
+  if (!state.origin) return;
+  _defaultOrigin = { ...state.origin };
+  try { localStorage.setItem("route_default_origin", JSON.stringify(_defaultOrigin)); } catch (e) {}
+  _updateDefaultButtons();
+}
+
+function _saveDefaultDest() {
+  if (!state.destination) return;
+  _defaultDestination = { ...state.destination };
+  try { localStorage.setItem("route_default_dest", JSON.stringify(_defaultDestination)); } catch (e) {}
+  _updateDefaultButtons();
+}
+
+function _applyDefaultOrigin() {
+  if (!_defaultOrigin) return;
+  state.origin = { ..._defaultOrigin };
+  setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
+  updateOriginLabel();
+  updateOptimizeButton();
+}
+
+function _applyDefaultDest() {
+  if (!_defaultDestination) return;
+  state.destination = { ..._defaultDestination };
+  setDestMarker({ lat: state.destination.lat, lng: state.destination.lng }, _clearDest);
+  updateDestLabel();
+}
+
+function _updateDefaultButtons() {
+  ["btn-apply-origin-default", "btn-apply-origin-default-m"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle("d-none", !_defaultOrigin);
+    if (_defaultOrigin) btn.title = `기본: ${_defaultOrigin.label}`;
+  });
+  ["btn-apply-dest-default", "btn-apply-dest-default-m"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle("d-none", !_defaultDestination);
+    if (_defaultDestination) btn.title = `기본: ${_defaultDestination.label}`;
+  });
+}
+
+// ── 출발지/도착지 클리어 헬퍼 ────────────────────────────────────────────────
+function _clearOrigin() {
+  state.origin = null;
+  clearOriginMarker();
+  updateOriginLabel();
+  updateOptimizeButton();
+}
+
+function _clearDest() {
+  state.destination = null;
+  clearDestMarker();
+  updateDestLabel();
+}
 
 // ── 컨텍스트 메뉴 ─────────────────────────────────────────────────────────────
 const ctxMenu = document.getElementById("ctx-menu");
@@ -40,7 +112,7 @@ document.addEventListener("touchend", hideContextMenu);
 ctxSetOrigin.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
   state.origin = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: "지도 선택" };
-  setOriginMarker(_pendingCtxLatLng);
+  setOriginMarker(_pendingCtxLatLng, _clearOrigin);
   updateOriginLabel();
   updateOptimizeButton();
   hideContextMenu();
@@ -49,32 +121,45 @@ ctxSetOrigin.addEventListener("click", () => {
 ctxSetDest.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
   state.destination = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: "지도 선택" };
-  setDestMarker(_pendingCtxLatLng);
+  setDestMarker(_pendingCtxLatLng, _clearDest);
   updateDestLabel();
   hideContextMenu();
 });
 
 // ── GPS 버튼 ──────────────────────────────────────────────────────────────────
-function setupGpsButton(btnId, labelUpdate) {
+function setupGpsButton(btnId) {
   const btn = document.getElementById(btnId);
   if (!btn) return;
   btn.addEventListener("click", () => {
     if (!navigator.geolocation) {
-      alert("이 브라우저는 GPS를 지원하지 않습니다.");
+      alert("이 브라우저는 위치 기능을 지원하지 않습니다.");
       return;
     }
+    btn.disabled = true;
+    btn.textContent = "⏳";
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        btn.disabled = false;
+        btn.textContent = "📍";
         state.origin = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           label: "현재 위치",
         };
-        setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng });
+        setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
         updateOriginLabel();
         updateOptimizeButton();
       },
-      () => alert("GPS 위치를 가져올 수 없습니다.")
+      (err) => {
+        btn.disabled = false;
+        btn.textContent = "📍";
+        if (err.code === 1) {
+          alert("위치 권한이 거부되었습니다.\n브라우저 주소창 왼쪽 자물쇠 아이콘에서 위치 권한을 허용해주세요.");
+        } else {
+          alert("위치를 가져올 수 없습니다. 스마트폰에서 접속하면 더 잘 작동합니다.");
+        }
+      },
+      { timeout: 8000 }
     );
   });
 }
@@ -82,33 +167,35 @@ function setupGpsButton(btnId, labelUpdate) {
 setupGpsButton("btn-gps");
 setupGpsButton("btn-gps-m");
 
-// ── 도착지 삭제 버튼 ─────────────────────────────────────────────────────────
-function setupClearDest(btnId) {
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    state.destination = null;
-    clearDestMarker();
-    updateDestLabel();
-  });
-}
+// ── 출발지/도착지 사이드바 버튼 ──────────────────────────────────────────────
+["btn-clear-origin", "btn-clear-origin-m"].forEach((id) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener("click", _clearOrigin);
+});
 
-setupClearDest("btn-clear-dest");
-setupClearDest("btn-clear-dest-m");
+["btn-clear-dest", "btn-clear-dest-m"].forEach((id) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener("click", _clearDest);
+});
 
-// ── 도착지 설정 버튼 (사이드바) ───────────────────────────────────────────────
-// 클릭 후 다음 지도 클릭 지점을 도착지로 지정하는 "대기 모드"
-let _waitingForDest = false;
+["btn-save-origin-default", "btn-save-origin-default-m"].forEach((id) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener("click", _saveDefaultOrigin);
+});
 
-function _enterDestMode() {
-  _waitingForDest = true;
-  document.body.style.cursor = "crosshair";
-  alert("지도를 클릭해 도착지를 지정하세요. (우클릭 메뉴를 이용해도 됩니다)");
-}
+["btn-save-dest-default", "btn-save-dest-default-m"].forEach((id) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener("click", _saveDefaultDest);
+});
 
-["btn-set-dest", "btn-set-dest-m"].forEach((id) => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener("click", _enterDestMode);
+["btn-apply-origin-default", "btn-apply-origin-default-m"].forEach((id) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener("click", _applyDefaultOrigin);
+});
+
+["btn-apply-dest-default", "btn-apply-dest-default-m"].forEach((id) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener("click", _applyDefaultDest);
 });
 
 // ── 라벨 업데이트 ─────────────────────────────────────────────────────────────
@@ -119,6 +206,13 @@ export function updateOriginLabel() {
   document.getElementById("label-origin").textContent = text;
   const m = document.getElementById("label-origin-m");
   if (m) m.textContent = text.replace("우클릭", "길게누르기");
+  const show = !!state.origin;
+  ["btn-clear-origin", "btn-clear-origin-m",
+   "btn-save-origin-default", "btn-save-origin-default-m"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("d-none", !show);
+  });
+  // apply 버튼은 _defaultOrigin 유무로 별도 관리 (_updateDefaultButtons)
 }
 
 export function updateDestLabel() {
@@ -130,10 +224,12 @@ export function updateDestLabel() {
     if (el) el.textContent = text;
   });
   const show = !!state.destination;
-  ["btn-clear-dest", "btn-clear-dest-m"].forEach((id) => {
+  ["btn-clear-dest", "btn-clear-dest-m",
+   "btn-save-dest-default", "btn-save-dest-default-m"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle("d-none", !show);
   });
+  // apply 버튼은 _defaultDestination 유무로 별도 관리 (_updateDefaultButtons)
 }
 
 export function updateOptimizeButton() {
@@ -163,7 +259,6 @@ export function updateSelectionSummary() {
   );
   const stayTotal = n * stay;
 
-  // 인접 선택 지점 간 직선 거리 합 × 1.4 / 60km/h → 분 (순서 무시 단순 추정)
   let driveEstMin = 0;
   const selLocs = LOCATIONS.filter((l) => state.selected.has(l.id));
   for (let i = 0; i + 1 < selLocs.length; i++) {
@@ -184,6 +279,39 @@ export function updateSelectionSummary() {
   updateOptimizeButton();
 }
 
+// ── 초기화 버튼 ───────────────────────────────────────────────────────────────
+function resetAll() {
+  clearSelection();
+  _clearOrigin();
+  _clearDest();
+  clearResultLayers();
+
+  // 디폴트 복원
+  if (_defaultOrigin) {
+    state.origin = { ..._defaultOrigin };
+    setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
+    updateOriginLabel();
+  }
+  if (_defaultDestination) {
+    state.destination = { ..._defaultDestination };
+    setDestMarker({ lat: state.destination.lat, lng: state.destination.lng }, _clearDest);
+    updateDestLabel();
+  }
+
+  ["result-panel", "result-panel-m"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add("d-none");
+  });
+  updateOriginLabel();
+  updateDestLabel();
+  updateSelectionSummary();
+}
+
+["btn-reset", "btn-reset-m"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", resetAll);
+});
+
 // ── 최적화 버튼 ───────────────────────────────────────────────────────────────
 ["btn-optimize", "btn-optimize-m"].forEach((id) => {
   const el = document.getElementById(id);
@@ -196,13 +324,27 @@ export function updateSelectionSummary() {
 });
 
 // ── 초기화 ────────────────────────────────────────────────────────────────────
-const { map, mapMobile } = initMaps(LOCATIONS, showContextMenu);
+initMaps(LOCATIONS, showContextMenu);
 
 onMarkerClick((id) => {
-  // selection.js 에서 처리
   if (window._selectionModule) window._selectionModule.toggleById(id);
 });
 
 initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton });
 
 window._optimizeModule = initOptimize(state, LOCATIONS);
+
+// 디폴트 출발지/도착지 적용
+_loadDefaults();
+_updateDefaultButtons();
+if (_defaultOrigin) {
+  state.origin = { ..._defaultOrigin };
+  setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
+  updateOriginLabel();
+  updateOptimizeButton();
+}
+if (_defaultDestination) {
+  state.destination = { ..._defaultDestination };
+  setDestMarker({ lat: state.destination.lat, lng: state.destination.lng }, _clearDest);
+  updateDestLabel();
+}
