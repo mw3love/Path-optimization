@@ -1,0 +1,224 @@
+/* ── 레이아웃 ─────────────────────────────────────────────── */
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+#sidebar {
+  width: 320px;
+  min-width: 280px;
+  max-width: 360px;
+  overflow: hidden;
+}
+
+#map {
+  min-height: 300px;
+}
+
+#map-mobile {
+  min-height: 100%;
+}
+
+/* ── 지점 목록 ───────────────────────────────────────────── */
+
+.location-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.location-item:hover {
+  background: #f0f0f0;
+}
+
+.location-item.highlighted {
+  background: #fff3cd;
+}
+
+.location-item input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.location-item .loc-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.location-item .loc-sub {
+  font-size: 0.75rem;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 시군구 배지 */
+.sigungu-badge {
+  display: inline-block;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border: 2px solid transparent;
+  color: #fff;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+
+.sigungu-badge.inactive {
+  opacity: 0.35;
+}
+
+/* ── 컨텍스트 메뉴 ───────────────────────────────────────── */
+
+.ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 160px;
+  padding: 4px 0;
+}
+
+.ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.ctx-menu-item:hover {
+  background: #f0f4ff;
+}
+
+/* ── 결과 패널 (데스크톱 오버레이) ───────────────────────── */
+
+#result-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 300px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  background: rgba(255,255,255,0.97);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  z-index: 1000;
+  padding: 12px;
+}
+
+/* ── 로딩 오버레이 ──────────────────────────────────────── */
+
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+}
+
+/* ── 타임라인 ────────────────────────────────────────────── */
+
+.timeline-table {
+  font-size: 0.8rem;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.timeline-table th,
+.timeline-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+.timeline-table .leg-num {
+  font-weight: bold;
+  color: #555;
+  white-space: nowrap;
+}
+
+.timeline-banner-approx {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+}
+
+/* ── 번호 DivIcon 마커 ────────────────────────────────────── */
+
+.num-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+
+/* ── 인쇄 스타일 ─────────────────────────────────────────── */
+
+@media print {
+  #app-desktop,
+  #app-mobile {
+    display: block !important;
+  }
+
+  #sidebar,
+  #btn-optimize,
+  .btn,
+  #sigungu-filters,
+  #location-search,
+  #ctx-menu,
+  #loading-overlay,
+  .nav-tabs,
+  #tab-list,
+  #tab-map {
+    display: none !important;
+  }
+
+  #map {
+    display: none !important;
+  }
+
+  #result-panel {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-inside: avoid;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+}
