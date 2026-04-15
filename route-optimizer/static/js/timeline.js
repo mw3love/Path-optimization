@@ -57,9 +57,9 @@ function _buildTimelineHtml(data, locations) {
       <tr>
         <th style="width:28px">#</th>
         <th>지점</th>
-        <th style="width:52px">도착</th>
-        <th style="width:52px">출발</th>
-        <th style="width:50px">이동</th>
+        <th style="width:48px">도착</th>
+        <th style="width:48px">출발</th>
+        <th style="width:44px">이동</th>
       </tr>
     </thead>
     <tbody>`;
@@ -78,7 +78,7 @@ function _buildTimelineHtml(data, locations) {
     const loc = locMap[String(id)];
     const leg = legs[i] || {};
     const driveStr = leg.drive_min != null
-      ? `${leg.drive_min}분 / ${leg.drive_km}km`
+      ? `${leg.drive_min}분<br>${leg.drive_km}km`
       : "—";
 
     html += `<tr>
@@ -96,12 +96,16 @@ function _buildTimelineHtml(data, locations) {
   // 도착지 (있을 경우)
   if (data.end) {
     const destLabel = data.end.label || "도착지";
+    const lastLeg = legs[order.length] || {};
+    const lastDriveStr = lastLeg.drive_min != null
+      ? `${lastLeg.drive_min}분<br>${lastLeg.drive_km}km`
+      : "—";
     html += `<tr style="background:#e8fce8;">
       <td class="leg-num">🏁</td>
       <td>${_esc(destLabel)}</td>
       <td>${summary.end_time || "—"}</td>
       <td>—</td>
-      <td>—</td>
+      <td style="white-space:nowrap">${lastDriveStr}</td>
     </tr>`;
   }
 

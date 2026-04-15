@@ -18,6 +18,35 @@ html, body {
   min-height: 300px;
 }
 
+/* 지도 위 GPS 버튼 */
+.map-gps-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1000;
+  width: 36px;
+  height: 36px;
+  border: 2px solid rgba(0,0,0,0.25);
+  border-radius: 4px;
+  background: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+  padding: 0;
+}
+.map-gps-btn:hover {
+  background: #f4f4f4;
+}
+
+/* 모바일 지도 탭의 GPS 버튼은 우상단 (Leaflet 줌 버튼 아래) */
+#tab-map .map-gps-btn {
+  bottom: auto;
+  top: 80px;
+}
+
 /* ── 모바일 탭: display:none 대신 visibility로 숨겨 Leaflet 크기 인식 보장 ── */
 /* Bootstrap이 탭을 display:none으로 숨기면 Leaflet이 크기를 0으로 읽는다.
    position:absolute + visibility:hidden 으로 바꾸면 항상 올바른 크기를 유지한다. */
@@ -44,6 +73,27 @@ html, body {
 
 #tab-map {
   overflow: hidden; /* Leaflet 맵 컨테이너는 스크롤 없음 */
+}
+
+/* 모바일: 최적화/초기화 버튼을 뷰포트 하단에 고정.
+   position:fixed 는 부모의 overflow 설정에 영향받지 않아 확실히 동작함.
+   탭 비활성 시 부모 tab-pane 의 visibility:hidden 을 상속해 자동으로 숨겨짐. */
+@media (max-width: 767px) {
+  .action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: #fff;
+    border-top: 1px solid #dee2e6;
+    padding: 8px 12px !important;
+  }
+
+  /* 고정 버튼 영역에 마지막 항목이 가려지지 않도록 여백 확보 */
+  #location-list-m {
+    padding-bottom: 80px;
+  }
 }
 
 #map-mobile {

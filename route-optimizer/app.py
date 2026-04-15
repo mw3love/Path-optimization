@@ -138,6 +138,13 @@ def optimize():
         total_drive_sec += dur_sec
         total_dist_m += dist_m
         current_time += timedelta(seconds=dur_sec)
+        legs.append({
+            "id": "__end__",
+            "drive_min": round(dur_sec / 60),
+            "drive_km": round(dist_m / 1000, 1),
+            "arrive": current_time.strftime("%H:%M"),
+            "depart": None,
+        })
 
     summary = {
         "total_drive_min": round(total_drive_sec / 60),
@@ -210,4 +217,8 @@ if __name__ == "__main__":
     # WERKZEUG_RUN_MAIN=true 는 자식에서만 설정되므로, prefetch는 자식에서만 실행.
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         start_prefetch(LOCATIONS)
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True)
+    ssl_context = None
+    if os.path.exists("cert.pem") and os.path.exists("key.pem"):
+        ssl_context = ("cert.pem", "key.pem")
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True,
+            ssl_context=ssl_context)

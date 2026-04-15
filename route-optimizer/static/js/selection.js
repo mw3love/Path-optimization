@@ -12,6 +12,9 @@ const _activeFilters = new Set();
 let _allSigungu = [];
 let _searchQuery = "";
 
+// Shift-클릭 범위 선택용: 마지막으로 클릭한 지점 ID
+let _lastClickedId = null;
+
 export function initSelection(locations, state, callbacks) {
   _locations = locations;
   _state = state;
@@ -161,9 +164,15 @@ function _createListItem(loc) {
   const cb = document.createElement("input");
   cb.type = "checkbox";
   cb.checked = _state.selected.has(loc.id);
-  cb.addEventListener("change", () => {
-    _setSelected(loc.id, cb.checked);
-    panToLocation(loc.id);
+  cb.addEventListener("click", (e) => {
+    if (e.shiftKey && _lastClickedId !== null) {
+      e.preventDefault();
+      _shiftSelect(loc.id);
+    } else {
+      _setSelected(loc.id, cb.checked);
+      _lastClickedId = loc.id;
+      panToLocation(loc.id);
+    }
   });
 
   const colorDot = document.createElement("span");
@@ -193,12 +202,36 @@ function _createListItem(loc) {
   // 행 클릭(체크박스 제외)으로도 토글
   div.addEventListener("click", (e) => {
     if (e.target === cb) return;
-    cb.checked = !cb.checked;
-    _setSelected(loc.id, cb.checked);
-    panToLocation(loc.id);
+    if (e.shiftKey && _lastClickedId !== null) {
+      _shiftSelect(loc.id);
+    } else {
+      cb.checked = !cb.checked;
+      _setSelected(loc.id, cb.checked);
+      _lastClickedId = loc.id;
+      panToLocation(loc.id);
+    }
   });
 
   return div;
+}
+
+// ── Shift-클릭 범위 선택 ──────────────────────────────────────────────────────
+
+function _shiftSelect(targetId) {
+  const visible = _visibleLocations();
+  const ids = visible.map((l) => l.id);
+  const fromIdx = ids.indexOf(_lastClickedId);
+  const toIdx = ids.indexOf(targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  const start = Math.min(fromIdx, toIdx);
+  const end = Math.max(fromIdx, toIdx);
+  const shouldSelect = !_state.selected.has(targetId);
+
+  for (let i = start; i <= end; i++) {
+    _setSelected(ids[i], shouldSelect);
+  }
+  _lastClickedId = targetId;
 }
 
 // ── 선택 상태 관리 ────────────────────────────────────────────────────────────
