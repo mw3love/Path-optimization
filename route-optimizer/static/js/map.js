@@ -1,5 +1,8 @@
 /**
  * map.js — Leaflet 초기화, 마커 렌더, 컨텍스트 메뉴(우클릭/롱프레스)
+ *
+ * 모바일 탭은 CSS에서 display:none 대신 visibility:hidden을 사용하므로
+ * 두 지도 모두 앱 시작 시 초기화해도 컨테이너 크기가 올바르게 인식된다.
  */
 
 // ── 시군구 색상 팔레트 ────────────────────────────────────────────────────────
@@ -32,15 +35,9 @@ let _mapMobile = null;
 const _markers = {};
 
 // 컨텍스트 메뉴 콜백
-let _onContextMenu = null; // (latlng, x, y) => void
+let _onContextMenu = null;
 
-/**
- * 지도를 초기화한다.
- * @param {string} containerId - 지도 컨테이너 DOM id
- * @param {Array}  locations   - window.LOCATIONS
- * @param {Function} onContextMenu - 우클릭/롱프레스 콜백 (latlng, pageX, pageY)
- * @returns {L.Map}
- */
+// ── 지도 초기화 ───────────────────────────────────────────────────────────────
 export function initMap(containerId, locations, onContextMenu) {
   _onContextMenu = onContextMenu;
 
@@ -54,22 +51,14 @@ export function initMap(containerId, locations, onContextMenu) {
     maxZoom: 19,
   }).addTo(map);
 
-  // 좌클릭 (도착지 대기 모드 등)
-  map.on("click", (e) => {
-    _fireMapClick(e.latlng);
-  });
+  map.on("click", (e) => _fireMapClick(e.latlng));
 
-  // 우클릭 컨텍스트 메뉴 (데스크톱)
   map.on("contextmenu", (e) => {
     e.originalEvent.preventDefault();
-    if (_onContextMenu) {
-      _onContextMenu(e.latlng, e.originalEvent.pageX, e.originalEvent.pageY);
-    }
+    if (_onContextMenu) _onContextMenu(e.latlng, e.originalEvent.pageX, e.originalEvent.pageY);
   });
 
-  // 롱프레스 (모바일 500ms)
   _attachLongPress(map);
-
   return map;
 }
 
@@ -81,11 +70,14 @@ export function initMaps(locations, onContextMenu) {
   return { map: _map, mapMobile: _mapMobile };
 }
 
-// ── 마커 렌더 ─────────────────────────────────────────────────────────────────
+export function invalidateMobileMapSize() {
+  if (_mapMobile) _mapMobile.invalidateSize({ animate: false });
+}
 
+// ── 마커 렌더 ─────────────────────────────────────────────────────────────────
 function _renderMarkers(locations) {
   for (const loc of locations) {
-    getSigunguColor(loc.sigungu); // 팔레트 사전 채움
+    getSigunguColor(loc.sigungu);
     _addLocationMarker(loc);
   }
 }
@@ -110,7 +102,6 @@ function _addLocationMarker(loc) {
     .addTo(_mapMobile)
     .bindPopup(popup);
 
-  // 마커 클릭 → selection.js 에서 등록한 콜백 호출
   marker.on("click", () => _fireMarkerClick(loc.id));
   markerM.on("click", () => _fireMarkerClick(loc.id));
 
@@ -118,7 +109,6 @@ function _addLocationMarker(loc) {
 }
 
 // ── 마커 강조/해제 ────────────────────────────────────────────────────────────
-
 export function setMarkerSelected(id, selected) {
   const entry = _markers[id];
   if (!entry) return;
@@ -139,10 +129,10 @@ export function panToLocation(id) {
 }
 
 // ── 출발지/도착지 마커 ────────────────────────────────────────────────────────
-let _originMarker = null;
+let _originMarker  = null;
 let _originMarkerM = null;
-let _destMarker = null;
-let _destMarkerM = null;
+let _destMarker    = null;
+let _destMarkerM   = null;
 
 const _starIcon = L.divIcon({
   className: "",
@@ -156,15 +146,15 @@ const _flagIcon = L.divIcon({
   iconAnchor: [11, 22],
 });
 
-export function setOriginMarker(latlng, onClear) {
+export function setOriginMarker(latlng) {
   [_originMarker, _originMarkerM].forEach((m) => m && m.remove());
-  _originMarker = L.marker(latlng, { icon: _starIcon }).addTo(_map).bindPopup("⭐ 출발지");
+  _originMarker  = L.marker(latlng, { icon: _starIcon }).addTo(_map).bindPopup("⭐ 출발지");
   _originMarkerM = L.marker(latlng, { icon: _starIcon }).addTo(_mapMobile).bindPopup("⭐ 출발지");
 }
 
-export function setDestMarker(latlng, onClear) {
+export function setDestMarker(latlng) {
   [_destMarker, _destMarkerM].forEach((m) => m && m.remove());
-  _destMarker = L.marker(latlng, { icon: _flagIcon }).addTo(_map).bindPopup("🏁 도착지");
+  _destMarker  = L.marker(latlng, { icon: _flagIcon }).addTo(_map).bindPopup("🏁 도착지");
   _destMarkerM = L.marker(latlng, { icon: _flagIcon }).addTo(_mapMobile).bindPopup("🏁 도착지");
 }
 
@@ -203,37 +193,28 @@ export function addNumberedMarker(latlng, num) {
 }
 
 export function drawPolyline(coords) {
-  // coords: [[lat, lng], ...]
   if (!coords || coords.length < 2) return;
-  const d = L.polyline(coords, { color: "#1a73e8", weight: 3, opacity: 0.7 }).addTo(_map);
-  const m = L.polyline(coords, { color: "#1a73e8", weight: 3, opacity: 0.7 }).addTo(_mapMobile);
+  const style = { color: "#1a73e8", weight: 3, opacity: 0.7 };
+  const d = L.polyline(coords, style).addTo(_map);
+  const m = L.polyline(coords, style).addTo(_mapMobile);
   _resultLayers.push({ d, m });
   _map.fitBounds(d.getBounds(), { padding: [40, 40] });
+  _mapMobile.fitBounds(m.getBounds(), { padding: [40, 40] });
 }
 
 // ── 내부 이벤트 ───────────────────────────────────────────────────────────────
 const _markerClickListeners = [];
-const _mapClickListeners = [];
+const _mapClickListeners    = [];
 
-export function onMarkerClick(fn) {
-  _markerClickListeners.push(fn);
-}
+export function onMarkerClick(fn) { _markerClickListeners.push(fn); }
+export function onMapClick(fn)    { _mapClickListeners.push(fn); }
 
-export function onMapClick(fn) {
-  _mapClickListeners.push(fn);
-}
-
-function _fireMarkerClick(id) {
-  _markerClickListeners.forEach((fn) => fn(id));
-}
-
-function _fireMapClick(latlng) {
-  _mapClickListeners.forEach((fn) => fn(latlng));
-}
+function _fireMarkerClick(id)    { _markerClickListeners.forEach((fn) => fn(id)); }
+function _fireMapClick(latlng)   { _mapClickListeners.forEach((fn) => fn(latlng)); }
 
 // ── 롱프레스 (모바일) ─────────────────────────────────────────────────────────
 function _attachLongPress(map) {
-  let _longPressTimer = null;
+  let _longPressTimer  = null;
   let _longPressActive = false;
 
   map.on("touchstart", (e) => {
@@ -245,19 +226,13 @@ function _attachLongPress(map) {
       const latlng = map.containerPointToLatLng(
         map.mouseEventToContainerPoint({ clientX: touch.clientX, clientY: touch.clientY })
       );
-      if (_onContextMenu) {
-        _onContextMenu(latlng, touch.pageX, touch.pageY);
-      }
+      if (_onContextMenu) _onContextMenu(latlng, touch.pageX, touch.pageY);
     }, 500);
   });
 
-  map.on("touchend touchmove", () => {
-    clearTimeout(_longPressTimer);
-  });
+  map.on("touchend touchmove", () => clearTimeout(_longPressTimer));
 
   map.on("touchend", (e) => {
-    if (_longPressActive) {
-      e.originalEvent.preventDefault();
-    }
+    if (_longPressActive) e.originalEvent.preventDefault();
   });
 }

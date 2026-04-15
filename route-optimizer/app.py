@@ -16,6 +16,14 @@ from optimizer import solve
 
 app = Flask(__name__)
 
+@app.after_request
+def no_cache_static(response):
+    """개발 환경: iOS Safari 등의 공격적 캐시를 방지해 JS/CSS 변경사항이 즉시 반영되도록."""
+    if request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 # ── 지점 데이터 로드 ────────────────────────────────────────────────────────────
 _BASE = Path(__file__).parent
 _LOCATIONS_PATH = _BASE / "locations.json"

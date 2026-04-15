@@ -6,9 +6,9 @@ import { buildNavButtons } from "./nav.js";
 export function renderTimeline(data, locations) {
   const html = _buildTimelineHtml(data, locations);
 
-  // 데스크톱: result-panel (지도 위 오버레이)
+  // 데스크톱: result-panel (지도 위 오버레이) — 모바일에서는 표시하지 않음
   const panel = document.getElementById("result-panel");
-  if (panel) {
+  if (panel && window.innerWidth >= 768) {
     panel.innerHTML = html;
     panel.classList.remove("d-none");
     _attachPrintBtn(panel);

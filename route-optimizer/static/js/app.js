@@ -3,7 +3,7 @@
  */
 import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
-         onMarkerClick } from "./map.js";
+         onMarkerClick, invalidateMobileMapSize } from "./map.js";
 import { initSelection, clearSelection } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 
@@ -94,20 +94,30 @@ const ctxSetDest = document.getElementById("ctx-set-dest");
 
 let _pendingCtxLatLng = null;
 
+// 롱프레스로 메뉴가 방금 열렸을 때, 손을 떼는 touchend가 즉시 닫지 않도록 방지
+let _ctxJustShown = false;
+
 function showContextMenu(latlng, pageX, pageY) {
   _pendingCtxLatLng = latlng;
   ctxMenu.style.left = `${pageX}px`;
   ctxMenu.style.top  = `${pageY}px`;
   ctxMenu.classList.remove("d-none");
+  _ctxJustShown = true;
 }
 
 function hideContextMenu() {
+  if (_ctxJustShown) {
+    _ctxJustShown = false;
+    return; // 롱프레스 직후 touchend는 무시
+  }
   ctxMenu.classList.add("d-none");
   _pendingCtxLatLng = null;
 }
 
 document.addEventListener("click", hideContextMenu);
 document.addEventListener("touchend", hideContextMenu);
+// 메뉴 안에서 touchend가 document로 버블링되지 않도록 — 항목 탭 시 메뉴가 즉시 닫히는 것 방지
+ctxMenu.addEventListener("touchend", (e) => e.stopPropagation());
 
 ctxSetOrigin.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
@@ -116,6 +126,10 @@ ctxSetOrigin.addEventListener("click", () => {
   updateOriginLabel();
   updateOptimizeButton();
   hideContextMenu();
+  // 모바일: 출발지 설정 후 목록 탭으로 자동 복귀
+  if (window.innerWidth < 768) {
+    document.getElementById("tab-list-btn")?.click();
+  }
 });
 
 ctxSetDest.addEventListener("click", () => {
@@ -124,6 +138,10 @@ ctxSetDest.addEventListener("click", () => {
   setDestMarker(_pendingCtxLatLng, _clearDest);
   updateDestLabel();
   hideContextMenu();
+  // 모바일: 도착지 설정 후 목록 탭으로 자동 복귀
+  if (window.innerWidth < 768) {
+    document.getElementById("tab-list-btn")?.click();
+  }
 });
 
 // ── GPS 버튼 ──────────────────────────────────────────────────────────────────
@@ -154,9 +172,14 @@ function setupGpsButton(btnId) {
         btn.disabled = false;
         btn.textContent = "📍";
         if (err.code === 1) {
-          alert("위치 권한이 거부되었습니다.\n브라우저 주소창 왼쪽 자물쇠 아이콘에서 위치 권한을 허용해주세요.");
+          // HTTP(비localhost)에서는 브라우저 보안 정책으로 위치 접근 자체가 차단됨
+          if (location.protocol === "http:" && location.hostname !== "localhost") {
+            alert("GPS를 사용하려면 HTTPS 연결이 필요합니다.\n\n현재 HTTP로 접속 중이므로 브라우저가 위치 접근을 차단합니다.\n\n대신: 지도 탭 → 현재 위치 근처 길게 누르기로 출발지를 설정하세요.");
+          } else {
+            alert("위치 권한이 거부되었습니다.\n\n브라우저 설정에서 이 사이트의 위치 권한을 허용한 후 다시 시도하세요.\n또는 지도 탭에서 길게 눌러 출발지를 설정할 수 있습니다.");
+          }
         } else {
-          alert("위치를 가져올 수 없습니다. 스마트폰에서 접속하면 더 잘 작동합니다.");
+          alert("위치를 가져올 수 없습니다.\n지도 탭에서 길게 눌러 출발지를 설정해주세요.");
         }
       },
       { timeout: 8000 }
@@ -298,10 +321,11 @@ function resetAll() {
     updateDestLabel();
   }
 
-  ["result-panel", "result-panel-m"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add("d-none");
-  });
+  // 데스크톱 패널만 숨김 (모바일은 탭 내부라 별도 처리 불필요)
+  const desktopPanel = document.getElementById("result-panel");
+  if (desktopPanel) desktopPanel.classList.add("d-none");
+  const mobilePanel = document.getElementById("result-panel-m");
+  if (mobilePanel) mobilePanel.innerHTML = '<p class="text-muted small text-center mt-4">최적화 후 결과가 표시됩니다.</p>';
   updateOriginLabel();
   updateDestLabel();
   updateSelectionSummary();
@@ -325,6 +349,11 @@ function resetAll() {
 
 // ── 초기화 ────────────────────────────────────────────────────────────────────
 initMaps(LOCATIONS, showContextMenu);
+
+// 지도 탭 전환 시 invalidateSize (CSS visibility 방식에서도 안전을 위해 유지)
+document.getElementById("tab-map-btn")?.addEventListener("click", () => {
+  setTimeout(() => invalidateMobileMapSize(), 50);
+});
 
 onMarkerClick((id) => {
   if (window._selectionModule) window._selectionModule.toggleById(id);

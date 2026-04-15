@@ -18,8 +18,40 @@ html, body {
   min-height: 300px;
 }
 
+/* ── 모바일 탭: display:none 대신 visibility로 숨겨 Leaflet 크기 인식 보장 ── */
+/* Bootstrap이 탭을 display:none으로 숨기면 Leaflet이 크기를 0으로 읽는다.
+   position:absolute + visibility:hidden 으로 바꾸면 항상 올바른 크기를 유지한다. */
+#app-mobile .tab-content {
+  position: relative;
+}
+
+#app-mobile .tab-pane {
+  display: block !important;   /* display:none 방지 */
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow-y: auto;
+  opacity: 1 !important;       /* Bootstrap fade 트랜지션 제거 */
+  transition: none !important;
+}
+
+#app-mobile .tab-pane.active {
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+#tab-map {
+  overflow: hidden; /* Leaflet 맵 컨테이너는 스크롤 없음 */
+}
+
 #map-mobile {
-  min-height: 100%;
+  height: 100%;
+  /* iOS Safari 길게누르기 시 기본 팝업(복사 등) 방지 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ── 지점 목록 ───────────────────────────────────────────── */
