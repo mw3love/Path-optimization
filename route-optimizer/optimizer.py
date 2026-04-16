@@ -1,11 +1,18 @@
 """
-optimizer.py — OR-Tools TSP (Open TSP / 종단 고정 분기)
+optimizer.py — OR-Tools TSP (Open TSP / 종단 고정 분기) + N일 배분
 
 solve(matrix, start_idx, end_idx=None, time_limit_sec=2) → list[int]
   matrix: {"durations": [[...], ...]}  (인덱스 기준)
   start_idx: depot 인덱스
   end_idx: 종단 고정 시 인덱스, None이면 Open TSP
   반환: 방문 순서 인덱스 리스트 (depot 제외)
+
+assign_days(full_matrix, all_keys, pool_ids, day_configs, work_minutes, stay_minutes) → list[list[str]]
+  pool_ids: 배분할 지점 id 리스트
+  day_configs: [{"start_key": str, "end_key": str|None}, ...]
+  work_minutes: 하루 업무 가용 분
+  stay_minutes: 지점당 체류 분
+  반환: 날짜별 지점 id 리스트 (마지막 날은 남은 전부)
 """
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
@@ -112,3 +119,101 @@ def solve(matrix: dict, start_idx: int, end_idx=None, time_limit_sec: int = 1) -
         route.append(last_node)
 
     return route
+
+
+# ── N일 배분 ──────────────────────────────────────────────────────────────────
+
+def assign_days(
+    full_matrix: dict,
+    all_keys: list,
+    pool_ids: list,
+    day_configs: list,
+    work_minutes: int,
+    stay_minutes: int,
+) -> list:
+    """
+    Greedy Nearest-Neighbor 방식으로 pool_ids 를 N일에 배분한다.
+
+    full_matrix: get_matrix() 반환값 (all_keys 전체 포함)
+    all_keys:    full_matrix의 행/열 순서와 1:1인 키 리스트
+    pool_ids:    배분할 지점 id 리스트
+    day_configs: [{"start_key": str, "end_key": str|None}, ...]
+    work_minutes: 하루 가용 업무 시간(분)
+    stay_minutes: 지점당 체류 시간(분)
+
+    반환: 날별 id 리스트 [ [id, ...], [id, ...], ... ]
+         - 마지막 날은 남은 지점 전부
+         - 풀 소진 후 날은 빈 리스트
+    """
+    durations = full_matrix["durations"]
+    key_idx = {k: i for i, k in enumerate(all_keys)}
+
+    remaining = list(pool_ids)
+    result = []
+    n_days = len(day_configs)
+
+    for day_num, cfg in enumerate(day_configs):
+        if not remaining:
+            result.append([])
+            continue
+
+        # 마지막 날: 남은 전부 배정
+        if day_num == n_days - 1:
+            result.append(list(remaining))
+            remaining = []
+            continue
+
+        start_key = cfg["start_key"]
+        end_key = cfg.get("end_key")
+
+        # 현재 위치 키 (출발지 기준)
+        cur_key = start_key
+        budget = work_minutes  # 남은 가용 시간(분)
+        day_ids = []
+
+        pool_set = set(remaining)
+
+        while pool_set and budget > stay_minutes:
+            cur_idx = key_idx.get(cur_key)
+            if cur_idx is None:
+                break
+
+            # 현재 위치에서 가장 가까운 미배정 지점 탐색
+            best_id = None
+            best_dur = float("inf")
+            for cand_id in pool_set:
+                cand_idx = key_idx.get(cand_id)
+                if cand_idx is None:
+                    continue
+                dur_sec = durations[cur_idx][cand_idx]
+                dur_min = dur_sec / 60.0
+                if dur_min < best_dur:
+                    best_dur = dur_min
+                    best_id = cand_id
+
+            if best_id is None:
+                break
+
+            # 도착지까지 돌아가는 비용 계산 (end_key가 있을 때)
+            cost_min = best_dur + stay_minutes  # 이동 + 체류
+            if end_key and end_key in key_idx:
+                best_cand_idx = key_idx[best_id]
+                end_idx = key_idx[end_key]
+                return_min = durations[best_cand_idx][end_idx] / 60.0
+            else:
+                return_min = 0.0
+
+            if cost_min + return_min > budget:
+                break  # 예산 초과 → 오늘 배정 종료
+
+            day_ids.append(best_id)
+            pool_set.discard(best_id)
+            budget -= cost_min
+            cur_key = best_id
+
+        result.append(day_ids)
+        # remaining 에서 오늘 배정된 지점 제거
+        assigned_set = set(day_ids)
+        remaining = [pid for pid in remaining if pid not in assigned_set]
+
+    return result

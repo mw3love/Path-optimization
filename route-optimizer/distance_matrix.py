@@ -37,10 +37,9 @@ def get_matrix(coords: list[tuple], keys: list[str]) -> dict:
     if n == 0:
         return {"durations": [], "distances": [], "source": "osrm"}
 
-    # 가상 키 분리
-    virtual = {"__start__", "__end__"}
-    real_indices = [i for i, k in enumerate(keys) if k not in virtual]
-    virtual_indices = [i for i, k in enumerate(keys) if k in virtual]
+    # 가상 키 분리 — __start__, __end__, __day0_start__ 등 __ 로 시작하는 키
+    real_indices = [i for i, k in enumerate(keys) if not _is_virtual_key(k)]
+    virtual_indices = [i for i, k in enumerate(keys) if _is_virtual_key(k)]
 
     # real-to-real 쌍 중 캐시 미스 확인
     real_keys = [keys[i] for i in real_indices]
@@ -126,12 +125,14 @@ def _fetch_osrm(coords: list[tuple], keys: list[str]) -> str:
 
 # ── Virtual 키 처리 ──────────────────────────────────────────────────────────
 
-_VIRTUAL_KEYS = {"__start__", "__end__"}
+def _is_virtual_key(k: str) -> bool:
+    """__start__, __end__, __day0_start__ 등 __ 로 시작하는 키는 virtual로 간주."""
+    return k.startswith("__")
 
 
 def _invalidate_virtual_cache():
     """출발지/도착지 관련 캐시를 제거한다. 매 요청마다 위치가 바뀔 수 있으므로."""
-    stale = [k for k in CACHE if k[0] in _VIRTUAL_KEYS or k[1] in _VIRTUAL_KEYS]
+    stale = [k for k in CACHE if _is_virtual_key(k[0]) or _is_virtual_key(k[1])]
     for k in stale:
         del CACHE[k]
 

@@ -2,6 +2,7 @@
  * timeline.js — 타임라인 패널 렌더 + 번호 DivIcon 스타일
  */
 import { buildNavButtons } from "./nav.js";
+import { preparePrint } from "./map.js";
 
 export function renderTimeline(data, locations) {
   const html = _buildTimelineHtml(data, locations);
@@ -22,6 +23,10 @@ export function renderTimeline(data, locations) {
     _attachPrintBtn(panelM);
     _attachNavButtons(panelM, data, locations);
   }
+}
+
+export function buildTimelineHtml(data, locations) {
+  return _buildTimelineHtml(data, locations);
 }
 
 function _buildTimelineHtml(data, locations) {
@@ -130,7 +135,10 @@ function _buildTimelineHtml(data, locations) {
 
 function _attachPrintBtn(container) {
   container.querySelectorAll(".btn-print").forEach((btn) => {
-    btn.addEventListener("click", () => window.print());
+    btn.addEventListener("click", async () => {
+      await preparePrint(); // 사이드바 숨김 + fitBounds + 타일 로딩 완료 대기
+      window.print();
+    });
   });
 }
 

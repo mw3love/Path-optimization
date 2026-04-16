@@ -3,9 +3,11 @@
  */
 import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
-         onMarkerClick, invalidateMobileMapSize } from "./map.js";
-import { initSelection, clearSelection } from "./selection.js";
+         onMarkerClick, invalidateMobileMapSize,
+         enableBoxSelect, onBoxSelect } from "./map.js";
+import { initSelection, clearSelection, selectByIds } from "./selection.js";
 import { initOptimize } from "./optimize.js";
+import { initMultiday } from "./multiday.js";
 
 const LOCATIONS = window.LOCATIONS;
 
@@ -15,63 +17,6 @@ export const state = {
   destination: null,  // { lat, lng, label } | null
   selected: new Set(),
 };
-
-// ── 디폴트 설정 (localStorage) ───────────────────────────────────────────────
-let _defaultOrigin = null;
-let _defaultDestination = null;
-
-function _loadDefaults() {
-  try {
-    const o = localStorage.getItem("route_default_origin");
-    if (o) _defaultOrigin = JSON.parse(o);
-    const d = localStorage.getItem("route_default_dest");
-    if (d) _defaultDestination = JSON.parse(d);
-  } catch (e) {}
-}
-
-function _saveDefaultOrigin() {
-  if (!state.origin) return;
-  _defaultOrigin = { ...state.origin };
-  try { localStorage.setItem("route_default_origin", JSON.stringify(_defaultOrigin)); } catch (e) {}
-  _updateDefaultButtons();
-}
-
-function _saveDefaultDest() {
-  if (!state.destination) return;
-  _defaultDestination = { ...state.destination };
-  try { localStorage.setItem("route_default_dest", JSON.stringify(_defaultDestination)); } catch (e) {}
-  _updateDefaultButtons();
-}
-
-function _applyDefaultOrigin() {
-  if (!_defaultOrigin) return;
-  state.origin = { ..._defaultOrigin };
-  setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
-  updateOriginLabel();
-  updateOptimizeButton();
-}
-
-function _applyDefaultDest() {
-  if (!_defaultDestination) return;
-  state.destination = { ..._defaultDestination };
-  setDestMarker({ lat: state.destination.lat, lng: state.destination.lng }, _clearDest);
-  updateDestLabel();
-}
-
-function _updateDefaultButtons() {
-  ["btn-apply-origin-default", "btn-apply-origin-default-m"].forEach((id) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.classList.toggle("d-none", !_defaultOrigin);
-    if (_defaultOrigin) btn.title = `기본: ${_defaultOrigin.label}`;
-  });
-  ["btn-apply-dest-default", "btn-apply-dest-default-m"].forEach((id) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.classList.toggle("d-none", !_defaultDestination);
-    if (_defaultDestination) btn.title = `기본: ${_defaultDestination.label}`;
-  });
-}
 
 // ── 출발지/도착지 클리어 헬퍼 ────────────────────────────────────────────────
 function _clearOrigin() {
@@ -190,6 +135,44 @@ function setupGpsButton(btnId) {
 setupGpsButton("btn-gps");
 setupGpsButton("btn-gps-m");
 
+// ── 박스 선택 버튼 ────────────────────────────────────────────────────────────
+function _setBoxSelectActive(active) {
+  enableBoxSelect(active);
+  ["btn-box-select", "btn-box-select-m"].forEach((btnId) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.classList.toggle("active", active);
+    btn.title = active ? "선택 취소 (클릭)" : "영역 선택 (드래그)";
+  });
+}
+
+["btn-box-select", "btn-box-select-m"].forEach((btnId) => {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const nowActive = !btn.classList.contains("active");
+    _setBoxSelectActive(nowActive);
+  });
+});
+
+onBoxSelect((ids) => {
+  _setBoxSelectActive(false); // 모드 종료 + 버튼 원복
+  if (ids.length > 0) selectByIds(ids);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (["btn-box-select", "btn-box-select-m"].some((id) => document.getElementById(id)?.classList.contains("active"))) {
+    // 박스 선택 모드 중 → 모드만 취소
+    _setBoxSelectActive(false);
+  } else if (state.selected.size > 0) {
+    // 선택 완료 후 → 선택 전체 해제
+    clearSelection();
+    updateOptimizeButton();
+    updateSelectionSummary();
+  }
+});
+
 // ── 출발지/도착지 사이드바 버튼 ──────────────────────────────────────────────
 ["btn-clear-origin", "btn-clear-origin-m"].forEach((id) => {
   const btn = document.getElementById(id);
@@ -201,26 +184,6 @@ setupGpsButton("btn-gps-m");
   if (btn) btn.addEventListener("click", _clearDest);
 });
 
-["btn-save-origin-default", "btn-save-origin-default-m"].forEach((id) => {
-  const btn = document.getElementById(id);
-  if (btn) btn.addEventListener("click", _saveDefaultOrigin);
-});
-
-["btn-save-dest-default", "btn-save-dest-default-m"].forEach((id) => {
-  const btn = document.getElementById(id);
-  if (btn) btn.addEventListener("click", _saveDefaultDest);
-});
-
-["btn-apply-origin-default", "btn-apply-origin-default-m"].forEach((id) => {
-  const btn = document.getElementById(id);
-  if (btn) btn.addEventListener("click", _applyDefaultOrigin);
-});
-
-["btn-apply-dest-default", "btn-apply-dest-default-m"].forEach((id) => {
-  const btn = document.getElementById(id);
-  if (btn) btn.addEventListener("click", _applyDefaultDest);
-});
-
 // ── 라벨 업데이트 ─────────────────────────────────────────────────────────────
 export function updateOriginLabel() {
   const text = state.origin
@@ -230,12 +193,10 @@ export function updateOriginLabel() {
   const m = document.getElementById("label-origin-m");
   if (m) m.textContent = text.replace("우클릭", "길게누르기");
   const show = !!state.origin;
-  ["btn-clear-origin", "btn-clear-origin-m",
-   "btn-save-origin-default", "btn-save-origin-default-m"].forEach((id) => {
+  ["btn-clear-origin", "btn-clear-origin-m"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle("d-none", !show);
   });
-  // apply 버튼은 _defaultOrigin 유무로 별도 관리 (_updateDefaultButtons)
 }
 
 export function updateDestLabel() {
@@ -247,12 +208,10 @@ export function updateDestLabel() {
     if (el) el.textContent = text;
   });
   const show = !!state.destination;
-  ["btn-clear-dest", "btn-clear-dest-m",
-   "btn-save-dest-default", "btn-save-dest-default-m"].forEach((id) => {
+  ["btn-clear-dest", "btn-clear-dest-m"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle("d-none", !show);
   });
-  // apply 버튼은 _defaultDestination 유무로 별도 관리 (_updateDefaultButtons)
 }
 
 export function updateOptimizeButton() {
@@ -260,6 +219,12 @@ export function updateOptimizeButton() {
   ["btn-optimize", "btn-optimize-m"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = !enabled;
+  });
+  // N일 계획 버튼: 지점 2개 이상 + 출발지 설정 시 활성화
+  const mdEnabled = state.selected.size >= 2 && !!state.origin;
+  ["btn-multiday", "btn-multiday-m"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !mdEnabled;
   });
 }
 
@@ -309,23 +274,14 @@ function resetAll() {
   _clearDest();
   clearResultLayers();
 
-  // 디폴트 복원
-  if (_defaultOrigin) {
-    state.origin = { ..._defaultOrigin };
-    setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
-    updateOriginLabel();
-  }
-  if (_defaultDestination) {
-    state.destination = { ..._defaultDestination };
-    setDestMarker({ lat: state.destination.lat, lng: state.destination.lng }, _clearDest);
-    updateDestLabel();
-  }
-
   // 데스크톱 패널만 숨김 (모바일은 탭 내부라 별도 처리 불필요)
   const desktopPanel = document.getElementById("result-panel");
   if (desktopPanel) desktopPanel.classList.add("d-none");
   const mobilePanel = document.getElementById("result-panel-m");
   if (mobilePanel) mobilePanel.innerHTML = '<p class="text-muted small text-center mt-4">최적화 후 결과가 표시됩니다.</p>';
+  // multiday 결과 패널 숨김
+  const mdPanel = document.getElementById("multiday-result-panel");
+  if (mdPanel) mdPanel.classList.add("d-none");
   updateOriginLabel();
   updateDestLabel();
   updateSelectionSummary();
@@ -363,17 +319,11 @@ initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton }
 
 window._optimizeModule = initOptimize(state, LOCATIONS);
 
-// 디폴트 출발지/도착지 적용
-_loadDefaults();
-_updateDefaultButtons();
-if (_defaultOrigin) {
-  state.origin = { ..._defaultOrigin };
-  setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
-  updateOriginLabel();
-  updateOptimizeButton();
-}
-if (_defaultDestination) {
-  state.destination = { ..._defaultDestination };
-  setDestMarker({ lat: state.destination.lat, lng: state.destination.lng }, _clearDest);
-  updateDestLabel();
-}
+const _multidayModule = initMultiday(state, LOCATIONS);
+window._multidayModule = _multidayModule;
+
+["btn-multiday", "btn-multiday-m"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", () => _multidayModule.runGrouping());
+});
+

@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>전파조사 경로 최적화</title>
 
-  <!-- Bootstrap 5 -->
-  <link rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <!-- Bootstrap 5 (로컬) -->
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css" />
 
-  <!-- Leaflet -->
-  <link rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet (로컬) -->
+  <link rel="stylesheet" href="/static/vendor/leaflet.css" />
 
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
@@ -43,14 +41,10 @@
       <!-- 출발지/도착지 표시 -->
       <div class="small text-muted mb-1 d-flex align-items-center gap-1">
         <span id="label-origin" class="flex-grow-1">출발지: 미지정 (지도 우클릭)</span>
-        <button id="btn-apply-origin-default" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
-        <button id="btn-save-origin-default" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 출발지로 저장" style="font-size:0.7rem;">저장</button>
         <button id="btn-clear-origin" class="btn btn-link btn-sm p-0 d-none">✕</button>
       </div>
       <div class="small text-muted mb-2 d-flex align-items-center gap-1">
         <span id="label-destination" class="flex-grow-1">도착지: 미지정 (Open TSP)</span>
-        <button id="btn-apply-dest-default" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
-        <button id="btn-save-dest-default" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 도착지로 저장" style="font-size:0.7rem;">저장</button>
         <button id="btn-clear-dest" class="btn btn-link btn-sm p-0 d-none">✕</button>
       </div>
 
@@ -74,7 +68,7 @@
       <div class="small text-muted mb-1">
         <span id="selection-summary">선택: 0개</span>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 mb-2">
         <button id="btn-optimize" class="btn btn-primary flex-grow-1" disabled>
           🔄 최적화
         </button>
@@ -82,12 +76,18 @@
           초기화
         </button>
       </div>
+      <button id="btn-multiday" class="btn btn-outline-primary w-100" disabled title="N일 경로 계획">
+        📅 N일 계획
+      </button>
     </div>
   </div>
 
   <!-- 지도 -->
   <div id="map" class="flex-grow-1" style="position:relative;">
     <button id="btn-gps" class="map-gps-btn" title="현재 위치를 출발지로">📍</button>
+    <button id="btn-box-select" class="map-gps-btn map-box-select-btn" title="영역 선택 (드래그)">
+      <span class="box-sel-icon"></span>
+    </button>
   </div>
 </div>
 
@@ -129,14 +129,10 @@
         </div>
         <div class="small text-muted mb-1 d-flex align-items-center gap-1">
           <span id="label-origin-m" class="flex-grow-1">출발지: 미지정 (지도 길게누르기)</span>
-          <button id="btn-apply-origin-default-m" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
-          <button id="btn-save-origin-default-m" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 출발지로 저장" style="font-size:0.7rem;">저장</button>
           <button id="btn-clear-origin-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
         <div class="small text-muted mb-2 d-flex align-items-center gap-1">
           <span id="label-destination-m" class="flex-grow-1">도착지: 미지정 (Open TSP)</span>
-          <button id="btn-apply-dest-default-m" class="btn btn-outline-secondary btn-sm py-0 px-1 d-none" style="font-size:0.7rem;">기본</button>
-          <button id="btn-save-dest-default-m" class="btn btn-link btn-sm p-0 d-none" title="현재 위치를 기본 도착지로 저장" style="font-size:0.7rem;">저장</button>
           <button id="btn-clear-dest-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
         <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
@@ -153,10 +149,13 @@
       <div id="location-list-m" class="flex-grow-1 overflow-auto px-2 py-1"></div>
       <div class="px-3 py-2 border-top action-bar">
         <div class="small text-muted mb-1"><span id="selection-summary-m">선택: 0개</span></div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 mb-1">
           <button id="btn-optimize-m" class="btn btn-primary flex-grow-1" disabled>🔄 최적화</button>
           <button id="btn-reset-m" class="btn btn-outline-secondary flex-grow-1" title="초기화">초기화</button>
         </div>
+        <button id="btn-multiday-m" class="btn btn-outline-primary w-100" disabled title="N일 경로 계획">
+          📅 N일 계획
+        </button>
       </div>
     </div>
 
@@ -164,6 +163,9 @@
     <div class="tab-pane fade h-100" id="tab-map" role="tabpanel" style="position:relative;">
       <div id="map-mobile" class="h-100"></div>
       <button id="btn-gps-m" class="map-gps-btn" title="현재 위치를 출발지로">📍</button>
+      <button id="btn-box-select-m" class="map-gps-btn map-box-select-btn" title="영역 선택 (드래그)">
+        <span class="box-sel-icon"></span>
+      </button>
     </div>
 
     <!-- 경로 탭 -->
@@ -177,6 +179,62 @@
 
 <!-- 결과 패널 (데스크톱용 오른쪽 패널 — 지도 위에 오버레이) -->
 <div id="result-panel" class="d-none"></div>
+
+<!-- N일 계획 결과 패널 (데스크톱: 지도 위 오버레이) -->
+<div id="multiday-result-panel" class="d-none"></div>
+
+<!-- N일 계획 모달 -->
+<div id="multiday-modal" class="d-none" role="dialog" aria-modal="true" aria-hidden="true">
+  <div id="md-modal-backdrop" class="md-modal-backdrop"></div>
+  <div class="md-modal-dialog">
+    <div class="md-modal-header">
+      <strong>📅 N일 경로 계획</strong>
+      <button id="md-modal-close" class="btn btn-link btn-sm p-0">✕</button>
+    </div>
+    <div class="md-modal-body">
+      <!-- 공통 파라미터 -->
+      <div class="row g-2 mb-3">
+        <div class="col-4">
+          <label class="form-label small mb-1">업무 시작</label>
+          <input type="time" id="md-work-start" class="form-control form-control-sm" value="09:00" />
+        </div>
+        <div class="col-4">
+          <label class="form-label small mb-1">업무 종료</label>
+          <input type="time" id="md-work-end" class="form-control form-control-sm" value="18:00" />
+        </div>
+        <div class="col-4">
+          <label class="form-label small mb-1">체류(분)</label>
+          <input type="number" id="md-stay-minutes" class="form-control form-control-sm"
+            value="20" min="1" max="120" />
+        </div>
+      </div>
+      <!-- Phase 2: 추정 결과 배너 (계산 후 표시) -->
+      <div id="md-estimate-banner" class="d-none mb-3">
+        <div class="md-estimate-info p-2 mb-2">
+          <span id="md-estimate-text"></span>
+        </div>
+        <div class="row g-2 align-items-center">
+          <div class="col-auto">
+            <label class="form-label small mb-0">일수 조정</label>
+          </div>
+          <div class="col-3">
+            <input type="number" id="md-num-days" class="form-control form-control-sm"
+              value="2" min="1" max="14" />
+          </div>
+          <div class="col-auto">
+            <button id="md-reestimate-btn" class="btn btn-outline-secondary btn-sm">재계산</button>
+          </div>
+        </div>
+      </div>
+      <!-- 날별 카드 (모달용 — 현재 미사용) -->
+      <div id="md-day-rows-modal"></div>
+    </div>
+    <div class="md-modal-footer">
+      <button id="md-estimate-btn" class="btn btn-primary w-100">일정 계산</button>
+      <button id="md-submit-btn" class="btn btn-success w-100 d-none">계획 생성</button>
+    </div>
+  </div>
+</div>
 
 <!-- 컨텍스트 메뉴 -->
 <div id="ctx-menu" class="ctx-menu d-none">
@@ -198,11 +256,11 @@
   window.LOCATIONS = {{ locations_json | safe }};
 </script>
 
-<!-- Bootstrap 5 JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Bootstrap 5 JS (로컬) -->
+<script src="/static/vendor/bootstrap.bundle.min.js"></script>
 
-<!-- Leaflet -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet (로컬) -->
+<script src="/static/vendor/leaflet.js"></script>
 
 <!-- App JS modules -->
 <script type="module" src="/static/js/app.js"></script>

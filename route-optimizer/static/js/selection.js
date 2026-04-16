@@ -275,6 +275,11 @@ function _syncListHighlight(id, selected) {
   });
 }
 
+// 박스 선택 등 외부에서 ID 목록으로 선택
+export function selectByIds(ids) {
+  ids.forEach((id) => _setSelected(id, true));
+}
+
 // 전체 선택 해제
 export function clearSelection() {
   for (const id of [..._state.selected]) {
