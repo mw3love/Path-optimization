@@ -6,7 +6,6 @@
  */
 import { clearResultLayers, addNumberedMarker, drawPolyline, onMapClick, offMapClick, getSigunguColor } from "./map.js";
 import { buildTimelineHtml } from "./timeline.js";
-import { buildNavButtons } from "./nav.js";
 
 // ── 날짜별 색상 팔레트 ────────────────────────────────────────────────────────
 export const DAY_COLORS = [
@@ -330,7 +329,6 @@ function _buildGroupCardHtml(g) {
         <div class="nday-timeline-wrap">${buildTimelineHtml(g.result, _locations)}</div>
         <div class="nday-result-btns mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-outline-primary nday-view-map-btn">🗺 지도로 보기</button>
-          <div class="nday-nav-wrap">${buildNavButtons(g.result, _locations)}</div>
         </div>
       </div>`;
   }
@@ -728,10 +726,6 @@ function _bindAccordion(panel, daysData, locations) {
       if (!isOpen) { body.classList.add("show"); hdr.setAttribute("aria-expanded", "true"); }
     });
   });
-  panel.querySelectorAll(".md-nav-placeholder").forEach((el) => {
-    const i = parseInt(el.dataset.day, 10);
-    if (daysData[i]) el.innerHTML = buildNavButtons(daysData[i], locations);
-  });
   panel.querySelectorAll(".md-print-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       panel.querySelectorAll(".md-accordion-body").forEach((b) => b.classList.add("show"));
@@ -783,7 +777,7 @@ function _buildResultHtml(daysData, locations) {
         <div class="md-accordion-body${isOpen ? " show" : ""}">
           ${lc === 0
             ? '<p class="text-muted small p-2">이 날 배정된 지점이 없습니다.</p>'
-            : buildTimelineHtml(dayData, locations) + `<div class="md-nav-placeholder mt-2" data-day="${i}"></div>`}
+            : buildTimelineHtml(dayData, locations)}
         </div>
       </div>`;
   });

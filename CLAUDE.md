@@ -58,7 +58,6 @@ static/css/style.css
 - 지도: Leaflet + OSM 타일. 지점은 CircleMarker, **시군구별 색상은 `address` 문자열에서 자동 추출**(예: "전북 고창군 …" → "고창군").
 - 마커 ↔ 사이드바 체크박스는 양방향 동기화.
 - 결과 마커는 번호 DivIcon(①②③…).
-- 내비 딥링크: T맵 `tmap://route?...&viaX0=…&viaY0=…` (경유지 제한 없음), 네이버지도 `nmap://route/car?...&waypoints=lat,lng|…` (경유지 최대 5개). 데스크톱에서는 T맵 웹 길찾기 URL로 폴백. 경유지 초과 시 해당 버튼 비활성화.
 
 ## 문서 관리
 

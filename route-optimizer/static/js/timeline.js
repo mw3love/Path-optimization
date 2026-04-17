@@ -1,7 +1,6 @@
 /**
  * timeline.js — 타임라인 패널 렌더 + 번호 DivIcon 스타일
  */
-import { buildNavButtons } from "./nav.js";
 import { preparePrint } from "./map.js";
 
 export function renderTimeline(data, locations) {
@@ -13,7 +12,6 @@ export function renderTimeline(data, locations) {
     panel.innerHTML = html;
     panel.classList.remove("d-none");
     _attachPrintBtn(panel);
-    _attachNavButtons(panel, data, locations);
   }
 
   // 모바일: result-panel-m (경로 탭 내부)
@@ -21,7 +19,6 @@ export function renderTimeline(data, locations) {
   if (panelM) {
     panelM.innerHTML = html;
     _attachPrintBtn(panelM);
-    _attachNavButtons(panelM, data, locations);
   }
 }
 
@@ -126,8 +123,6 @@ function _buildTimelineHtml(data, locations) {
 
   html += `</tbody></table>`;
 
-  // 내비 + 인쇄 버튼 플레이스홀더
-  html += `<div class="nav-buttons-placeholder mt-2"></div>`;
   html += `<button class="btn btn-sm btn-outline-secondary mt-2 btn-print w-100">🖨️ 인쇄 미리보기</button>`;
 
   return html;
@@ -139,12 +134,6 @@ function _attachPrintBtn(container) {
       await preparePrint(); // 사이드바 숨김 + fitBounds + 타일 로딩 완료 대기
       window.print();
     });
-  });
-}
-
-function _attachNavButtons(container, data, locations) {
-  container.querySelectorAll(".nav-buttons-placeholder").forEach((el) => {
-    el.innerHTML = buildNavButtons(data, locations);
   });
 }
 
