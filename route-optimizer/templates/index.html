@@ -20,8 +20,11 @@
 
   <!-- 사이드바 -->
   <div id="sidebar" class="d-flex flex-column border-end bg-light">
-    <div class="sidebar-header px-3 py-2 border-bottom">
+    <div class="sidebar-header px-3 py-2 border-bottom d-flex align-items-center justify-content-between">
       <h6 class="mb-0 fw-bold">전파조사 경로 최적화</h6>
+      <a href="/admin" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;">
+        &#128229; Import
+      </a>
     </div>
 
     <!-- 설정 영역 -->
@@ -40,11 +43,11 @@
 
       <!-- 출발지/도착지 표시 -->
       <div class="small text-muted mb-1 d-flex align-items-center gap-1">
-        <span id="label-origin" class="flex-grow-1">출발지: 미지정 (지도 우클릭)</span>
+        <span id="label-origin" class="flex-grow-1">출발지: 미지정</span>
         <button id="btn-clear-origin" class="btn btn-link btn-sm p-0 d-none">✕</button>
       </div>
       <div class="small text-muted mb-2 d-flex align-items-center gap-1">
-        <span id="label-destination" class="flex-grow-1">도착지: 미지정 (Open TSP)</span>
+        <span id="label-destination" class="flex-grow-1">도착지: 미지정</span>
         <button id="btn-clear-dest" class="btn btn-link btn-sm p-0 d-none">✕</button>
       </div>
 
@@ -128,11 +131,11 @@
           </div>
         </div>
         <div class="small text-muted mb-1 d-flex align-items-center gap-1">
-          <span id="label-origin-m" class="flex-grow-1">출발지: 미지정 (지도 길게누르기)</span>
+          <span id="label-origin-m" class="flex-grow-1">출발지: 미지정</span>
           <button id="btn-clear-origin-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
         <div class="small text-muted mb-2 d-flex align-items-center gap-1">
-          <span id="label-destination-m" class="flex-grow-1">도착지: 미지정 (Open TSP)</span>
+          <span id="label-destination-m" class="flex-grow-1">도착지: 미지정</span>
           <button id="btn-clear-dest-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
         <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
@@ -183,58 +186,48 @@
 <!-- N일 계획 결과 패널 (데스크톱: 지도 위 오버레이) -->
 <div id="multiday-result-panel" class="d-none"></div>
 
-<!-- N일 계획 모달 -->
-<div id="multiday-modal" class="d-none" role="dialog" aria-modal="true" aria-hidden="true">
-  <div id="md-modal-backdrop" class="md-modal-backdrop"></div>
-  <div class="md-modal-dialog">
-    <div class="md-modal-header">
-      <strong>📅 N일 경로 계획</strong>
-      <button id="md-modal-close" class="btn btn-link btn-sm p-0">✕</button>
+<!-- N일 계획 칸반 패널 (전체화면 오버레이) -->
+<div id="nday-panel" class="d-none">
+  <!-- 헤더 -->
+  <div class="nday-header">
+    <strong class="nday-title">📅 N일 경로 계획</strong>
+    <div class="nday-common-settings">
+      <label class="nday-setting-label">업무시작
+        <input type="time" id="nday-work-start" class="form-control form-control-sm nday-time-input" value="09:00" />
+      </label>
+      <label class="nday-setting-label">체류(분)
+        <input type="number" id="nday-stay-minutes" class="form-control form-control-sm nday-stay-input"
+          value="20" min="1" max="120" />
+      </label>
     </div>
-    <div class="md-modal-body">
-      <!-- 공통 파라미터 -->
-      <div class="row g-2 mb-3">
-        <div class="col-4">
-          <label class="form-label small mb-1">업무 시작</label>
-          <input type="time" id="md-work-start" class="form-control form-control-sm" value="09:00" />
-        </div>
-        <div class="col-4">
-          <label class="form-label small mb-1">업무 종료</label>
-          <input type="time" id="md-work-end" class="form-control form-control-sm" value="18:00" />
-        </div>
-        <div class="col-4">
-          <label class="form-label small mb-1">체류(분)</label>
-          <input type="number" id="md-stay-minutes" class="form-control form-control-sm"
-            value="20" min="1" max="120" />
-        </div>
-      </div>
-      <!-- Phase 2: 추정 결과 배너 (계산 후 표시) -->
-      <div id="md-estimate-banner" class="d-none mb-3">
-        <div class="md-estimate-info p-2 mb-2">
-          <span id="md-estimate-text"></span>
-        </div>
-        <div class="row g-2 align-items-center">
-          <div class="col-auto">
-            <label class="form-label small mb-0">일수 조정</label>
-          </div>
-          <div class="col-3">
-            <input type="number" id="md-num-days" class="form-control form-control-sm"
-              value="2" min="1" max="14" />
-          </div>
-          <div class="col-auto">
-            <button id="md-reestimate-btn" class="btn btn-outline-secondary btn-sm">재계산</button>
-          </div>
-        </div>
-      </div>
-      <!-- 날별 카드 (모달용 — 현재 미사용) -->
-      <div id="md-day-rows-modal"></div>
-    </div>
-    <div class="md-modal-footer">
-      <button id="md-estimate-btn" class="btn btn-primary w-100">일정 계산</button>
-      <button id="md-submit-btn" class="btn btn-success w-100 d-none">계획 생성</button>
+    <div class="nday-header-actions">
+      <button id="nday-add-group-btn" class="btn btn-outline-primary btn-sm">+ 그룹 추가</button>
+      <button id="nday-optimize-all-btn" class="btn btn-warning btn-sm" disabled>⚡ 전체 최적화</button>
+      <button id="nday-done-btn" class="btn btn-success btn-sm" disabled>완료</button>
+      <button id="nday-close-btn" class="btn btn-outline-secondary btn-sm">✕ 닫기</button>
     </div>
   </div>
+  <!-- 바디: 가로 스크롤 칸반 -->
+  <div class="nday-body">
+    <!-- 왼쪽: 미배정 열 -->
+    <div class="nday-left-col">
+      <div class="nday-col-header">미배정 <span id="nday-unassigned-count" class="badge bg-secondary">0</span></div>
+      <div id="nday-sgg-bar" class="nday-sgg-bar"></div>
+      <div id="nday-unassigned-zone" class="nday-drop-zone"></div>
+    </div>
+    <!-- 구분선 -->
+    <div class="nday-divider"></div>
+    <!-- 그룹 열들 (동적 생성) -->
+    <div id="nday-groups-container" class="nday-groups-container"></div>
+  </div>
 </div>
+<!-- 지도 클릭 좌표 선택 인디케이터 (패널 밖 — 반투명 시에도 보임) -->
+<div id="nday-map-pick-indicator" class="nday-map-pick-indicator d-none">
+  <span>지도를 클릭해 위치를 선택하세요</span>
+  <button id="nday-map-pick-cancel" class="btn btn-sm btn-outline-light ms-2">취소</button>
+</div>
+<!-- 반투명 모드: 패널로 돌아가기 버튼 (패널 밖 — 항상 클릭 가능) -->
+<button id="nday-map-back-btn" class="nday-map-back-btn d-none">← 패널로 돌아가기</button>
 
 <!-- 컨텍스트 메뉴 -->
 <div id="ctx-menu" class="ctx-menu d-none">

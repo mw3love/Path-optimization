@@ -4,16 +4,23 @@ app.py — Flask 엔트리포인트
   POST /api/optimize → 최적화
   GET  /api/health  → OSRM 연결 상태·캐시 상태
 """
+import csv
+import io
 import json
 import math
 import os
+import re
 import socket
 import ipaddress
+import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 import datetime as dt
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template, render_template_string, request, Response
 from distance_matrix import get_matrix, fetch_route_geometry
 from optimizer import solve, assign_days
 
@@ -128,9 +135,19 @@ def no_cache_static(response):
 # ── 지점 데이터 로드 ────────────────────────────────────────────────────────────
 _BASE = Path(__file__).parent
 _LOCATIONS_PATH = _BASE / "locations.json"
+_DATA_SOURCE_PATH = _BASE / "data_source.json"
 
 with open(_LOCATIONS_PATH, encoding="utf-8") as f:
     LOCATIONS: list = json.load(f)
+
+_locations_lock = threading.Lock()
+
+
+def _reload_locations(new_list: list):
+    """LOCATIONS 전역 변수를 thread-safe하게 교체 (서버 재시작 불필요)."""
+    global LOCATIONS
+    with _locations_lock:
+        LOCATIONS = new_list
 
 # ── 라우트 ──────────────────────────────────────────────────────────────────────
 
@@ -584,6 +601,26 @@ def estimate_days():
     })
 
 
+@app.route("/cert")
+def download_cert():
+    """
+    iOS Safari에서 열면 인증서 설치 프롬프트가 뜨는 엔드포인트.
+    아이폰이 서버를 신뢰하려면 이 인증서를 설치 → 신뢰 설정까지 해야 함.
+    """
+    cert_path = _BASE / "cert.pem"
+    if not cert_path.exists():
+        return "인증서 파일이 없습니다. HTTPS 없이 실행 중인지 확인하세요.", 404
+
+    cert_data = cert_path.read_bytes()
+    return Response(
+        cert_data,
+        mimetype="application/x-x509-ca-cert",
+        headers={
+            "Content-Disposition": "attachment; filename=route-optimizer-ca.crt",
+        }
+    )
+
+
 @app.route("/api/health")
 def health():
     osrm_status = "unknown"
@@ -608,6 +645,269 @@ def health():
     })
 
 
+# ── 관리 페이지 헬퍼 ────────────────────────────────────────────────────────────
+
+def _parse_gsheet_url(url: str) -> tuple:
+    """구글 시트 URL 또는 ID에서 (sheet_id, gid) 추출."""
+    url = url.strip()
+    # 순수 ID (슬래시/점 없이 30자 이상)
+    if re.fullmatch(r"[A-Za-z0-9_-]{30,}", url):
+        return url, "0"
+    m = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]+)", url)
+    if not m:
+        raise ValueError(f"구글 시트 URL 형식을 인식할 수 없습니다: {url}")
+    sheet_id = m.group(1)
+    parsed = urllib.parse.urlparse(url)
+    frag_gid = re.search(r"gid=(\d+)", parsed.fragment)
+    query_params = urllib.parse.parse_qs(parsed.query)
+    if frag_gid:
+        gid = frag_gid.group(1)
+    elif "gid" in query_params:
+        gid = query_params["gid"][0]
+    else:
+        gid = "0"
+    return sheet_id, gid
+
+
+def _fetch_rows_from_gsheet(url: str) -> list:
+    """공개 구글 시트를 CSV로 내려받아 rows 반환."""
+    sheet_id, gid = _parse_gsheet_url(url)
+    csv_url = (f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+               f"/export?format=csv&gid={gid}")
+    req = urllib.request.Request(csv_url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            ct = resp.headers.get("Content-Type", "")
+            if "text/html" in ct:
+                raise ValueError("시트가 공개 상태인지 확인하세요 (로그인 페이지로 리다이렉트됨)")
+            content = resp.read().decode("utf-8-sig")
+    except urllib.error.HTTPError as e:
+        raise ValueError(f"시트 접근 실패 (HTTP {e.code}): 공개 시트인지 확인하세요")
+    except urllib.error.URLError as e:
+        raise ValueError(f"네트워크 오류: {e.reason}")
+    reader = csv.reader(io.StringIO(content))
+    return [row for row in reader]
+
+
+def _fetch_rows_from_xlsx(file_bytes: bytes) -> list:
+    """xlsx 바이너리에서 rows 반환 (첫 번째 활성 시트)."""
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    return [list(row) for row in ws.iter_rows(values_only=True)]
+
+
+def _is_numeric(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def _find_header_row_generic(rows: list) -> int:
+    """헤더 행 인덱스(0-based) 반환. NA+Point_Name 우선, 없으면 비숫자 셀 5개 이상인 첫 행."""
+    fallback = None
+    for i, row in enumerate(rows):
+        cells = [str(c).strip() if c is not None else "" for c in row]
+        if "NA" in cells and "Point_Name" in cells:
+            return i
+        if fallback is None:
+            non_num = [s for s in cells if s and not _is_numeric(s)]
+            if len(non_num) >= 5:
+                fallback = i
+    return fallback if fallback is not None else 0
+
+
+def _build_col_map(header_row: list) -> dict:
+    """헤더 행 → {컬럼명: 인덱스}"""
+    return {
+        str(cell).strip(): idx
+        for idx, cell in enumerate(header_row)
+        if cell is not None and str(cell).strip()
+    }
+
+
+def _parse_rows_dynamic(rows: list, col_positions: dict, user_field_map: dict) -> tuple:
+    """
+    rows: 헤더 다음 데이터 행 목록
+    col_positions: {컬럼명: 컬럼인덱스}
+    user_field_map: {"id":..., "name":..., "address":..., "sigungu":..., "lat":..., "lng":...}
+    Returns: (locations_list, skipped_count)
+    """
+    locations = []
+    skipped = 0
+
+    for row in rows:
+        if all(c is None or str(c).strip() == "" for c in row):
+            continue
+
+        def get_val(field_key):
+            col_name = user_field_map.get(field_key)
+            if not col_name:
+                return None
+            col_idx = col_positions.get(col_name)
+            if col_idx is None or col_idx >= len(row):
+                return None
+            v = row[col_idx]
+            return str(v).strip() if v is not None else None
+
+        id_val = get_val("id")
+        name_val = get_val("name")
+        address_val = get_val("address") or ""
+        sigungu_val = get_val("sigungu") or ""
+        lat_str = get_val("lat")
+        lng_str = get_val("lng")
+
+        if not id_val or not name_val:
+            skipped += 1
+            continue
+
+        try:
+            lat = float(lat_str) if lat_str else None
+            lng = float(lng_str) if lng_str else None
+        except (ValueError, TypeError):
+            lat = lng = None
+
+        if lat is None or lng is None:
+            skipped += 1
+            continue
+
+        try:
+            seq = int(float(id_val))
+        except (ValueError, TypeError):
+            seq = 0
+
+        loc_id = str(int(float(id_val))) if seq else str(id_val)
+        locations.append({
+            "id": loc_id,
+            "seq": seq,
+            "name": name_val,
+            "address": address_val,
+            "sigungu": sigungu_val,
+            "lat": lat,
+            "lng": lng,
+        })
+
+    return locations, skipped
+
+
+# ── 관리 페이지 라우트 ──────────────────────────────────────────────────────────
+
+@app.route("/admin")
+def admin():
+    return render_template("admin.html")
+
+
+@app.route("/api/admin/status")
+def admin_status():
+    ds = None
+    if _DATA_SOURCE_PATH.exists():
+        try:
+            ds = json.loads(_DATA_SOURCE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return jsonify({"location_count": len(LOCATIONS), "data_source": ds})
+
+
+def _parse_source_from_request():
+    """request에서 rows와 ds_info를 파싱해 반환. 오류 시 ValueError."""
+    if request.content_type and "multipart" in request.content_type:
+        f = request.files.get("file")
+        if not f:
+            raise ValueError("파일이 없습니다")
+        rows = _fetch_rows_from_xlsx(f.read())
+        ds_info = {"type": "xlsx", "excel_filename": f.filename or "uploaded.xlsx"}
+    else:
+        body = request.get_json(force=True) or {}
+        url = body.get("url", "").strip()
+        if not url:
+            raise ValueError("url이 없습니다")
+        rows = _fetch_rows_from_gsheet(url)
+        _, gid = _parse_gsheet_url(url)
+        ds_info = {"type": "gsheet", "gsheet_url": url, "gsheet_gid": gid}
+    return rows, ds_info
+
+
+@app.route("/api/admin/preview", methods=["POST"])
+def admin_preview():
+    """URL 또는 파일에서 헤더(컬럼 목록)를 추출해 반환."""
+    try:
+        rows, _ = _parse_source_from_request()
+
+        if not rows:
+            return jsonify({"error": "데이터가 없습니다"}), 400
+
+        header_idx = _find_header_row_generic(rows)
+        col_map = _build_col_map(rows[header_idx])
+        columns = list(col_map.keys())
+        data_rows = [r for r in rows[header_idx + 1:] if any(c is not None and str(c).strip() for c in r)]
+
+        return jsonify({
+            "columns": columns,
+            "header_row": header_idx + 1,  # 1-based (사용자 표시용)
+            "total_data_rows": len(data_rows),
+        })
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"처리 오류: {e}"}), 500
+
+
+@app.route("/api/admin/import", methods=["POST"])
+def admin_import():
+    """데이터 가져오기: locations.json 저장 + 메모리 즉시 반영 + data_source.json 저장."""
+    try:
+        rows, ds_info = _parse_source_from_request()
+
+        if request.content_type and "multipart" in request.content_type:
+            col_map_str = request.form.get("column_map", "{}")
+            try:
+                user_field_map = json.loads(col_map_str)
+            except json.JSONDecodeError:
+                return jsonify({"error": "column_map JSON 파싱 오류"}), 400
+        else:
+            body = request.get_json(force=True) or {}
+            user_field_map = body.get("column_map", {})
+
+        required_fields = ["id", "name", "lat", "lng"]
+        missing = [k for k in required_fields if not user_field_map.get(k)]
+        if missing:
+            return jsonify({"error": f"필수 매핑 누락: {missing}"}), 400
+
+        header_idx = _find_header_row_generic(rows)
+        col_positions = _build_col_map(rows[header_idx])
+        data_rows = rows[header_idx + 1:]
+
+        locations, skipped = _parse_rows_dynamic(data_rows, col_positions, user_field_map)
+
+        if not locations:
+            return jsonify({"error": "가져온 지점이 0개입니다. 컬럼 매핑을 확인하세요"}), 400
+
+        # locations.json 저장
+        _LOCATIONS_PATH.write_text(
+            json.dumps(locations, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        # 메모리 즉시 반영
+        _reload_locations(locations)
+
+        # data_source.json 저장 (locations.json 성공 후)
+        ds_info["column_map"] = user_field_map
+        _DATA_SOURCE_PATH.write_text(
+            json.dumps(ds_info, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        return jsonify({
+            "imported": len(locations),
+            "skipped": skipped,
+            "location_count": len(LOCATIONS),
+        })
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"처리 오류: {e}"}), 500
+
+
 # ── 기동 ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -628,7 +928,15 @@ if __name__ == "__main__":
         ssl_context = (str(_BASE / "cert.pem"), str(_BASE / "key.pem"))
 
     proto = "https" if ssl_context else "http"
-    print(f"\n  접속 주소: {proto}://{lan_ip}:5000\n")
+    print(f"\n  접속 주소: {proto}://{lan_ip}:5000")
+    if ssl_context:
+        print(f"\n  ─── 아이폰 최초 접속 시 인증서 설치 필요 ───")
+        print(f"  1. 아이폰 Safari에서 {proto}://{lan_ip}:5000/cert 열기")
+        print(f"  2. '허용' → 설정 앱으로 이동")
+        print(f"  3. 설정 > 일반 > VPN 및 기기 관리 > 프로파일 설치")
+        print(f"  4. 설정 > 일반 > 정보 > 인증서 신뢰 설정 → 해당 인증서 토글 ON")
+        print(f"  5. 이후 {proto}://{lan_ip}:5000 접속")
+        print(f"  ─────────────────────────────────────────\n")
 
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True,
             ssl_context=ssl_context)

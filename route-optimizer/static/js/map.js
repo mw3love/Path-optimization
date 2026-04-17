@@ -308,6 +308,7 @@ const _mapClickListeners    = [];
 
 export function onMarkerClick(fn) { _markerClickListeners.push(fn); }
 export function onMapClick(fn)    { _mapClickListeners.push(fn); }
+export function offMapClick(fn)   { const i = _mapClickListeners.indexOf(fn); if (i >= 0) _mapClickListeners.splice(i, 1); }
 
 function _fireMarkerClick(id)    { _markerClickListeners.forEach((fn) => fn(id)); }
 function _fireMapClick(latlng)   { _mapClickListeners.forEach((fn) => fn(latlng)); }

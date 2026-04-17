@@ -166,7 +166,6 @@ function _createListItem(loc) {
   cb.checked = _state.selected.has(loc.id);
   cb.addEventListener("click", (e) => {
     if (e.shiftKey && _lastClickedId !== null) {
-      e.preventDefault();
       _shiftSelect(loc.id);
     } else {
       _setSelected(loc.id, cb.checked);

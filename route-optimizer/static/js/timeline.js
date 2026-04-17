@@ -119,7 +119,7 @@ function _buildTimelineHtml(data, locations) {
     <td colspan="2">합계</td>
     <td>${data.end ? summary.end_time || "" : ""}</td>
     <td colspan="2">
-      이동 ${summary.total_drive_min != null ? summary.total_drive_min + "분" : "—"}
+      이동 ${summary.total_drive_min != null ? _fmtMinutes(summary.total_drive_min) : "—"}
       / ${summary.total_dist_km != null ? summary.total_dist_km + "km" : "—"}
     </td>
   </tr>`;
@@ -146,6 +146,13 @@ function _attachNavButtons(container, data, locations) {
   container.querySelectorAll(".nav-buttons-placeholder").forEach((el) => {
     el.innerHTML = buildNavButtons(data, locations);
   });
+}
+
+function _fmtMinutes(min) {
+  if (min < 60) return `${min}분`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}시간(${min}분)` : `${h}시간 ${m}분(${min}분)`;
 }
 
 function _subtractMinutes(timeStr, minutes) {

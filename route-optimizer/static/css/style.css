@@ -507,6 +507,447 @@ html, body {
   line-height: 1;
 }
 
+/* ── N일 계획: 칸반 패널 ─────────────────────────────────── */
+
+#nday-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: #f4f6fa;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#nday-panel.nday-panel--transparent {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 헤더 */
+.nday-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.nday-title {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.nday-common-settings {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.nday-setting-label {
+  font-size: 0.75rem;
+  color: #555;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 0;
+}
+
+.nday-time-input {
+  width: 120px;
+}
+
+.nday-stay-input {
+  width: 70px;
+}
+
+.nday-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 바디: 가로 스크롤 칸반 */
+.nday-body {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  padding: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 미배정 열 */
+.nday-left-col {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.nday-divider {
+  width: 1px;
+  background: #dee2e6;
+  align-self: stretch;
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+
+/* 열 헤더 */
+.nday-col-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #444;
+  padding: 6px 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 드롭존 */
+.nday-drop-zone {
+  min-height: 80px;
+  border: 2px dashed #c8d0dc;
+  border-radius: 8px;
+  padding: 6px;
+  background: #fff;
+  transition: border-color 0.15s, background 0.15s;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.nday-drop-zone.drag-over {
+  border-color: #1a73e8;
+  background: #e8f0fe;
+}
+
+.nday-drop-hint {
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #aaa;
+  padding: 12px 4px;
+}
+
+/* 칩 */
+.nday-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #e9ecef;
+  border: 1px solid #ced4da;
+  border-radius: 16px;
+  padding: 3px 6px 3px 4px;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.nday-chip:active { cursor: grabbing; }
+
+.nday-chip--dragging {
+  opacity: 0.4;
+}
+
+.nday-chip--touch-clone {
+  position: fixed;
+  z-index: 9999;
+  opacity: 0.85;
+  pointer-events: none;
+  cursor: grabbing;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+.nday-chip-drag {
+  color: #888;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.nday-chip-sgg {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  color: #fff;
+  background: #6c757d;
+  border-radius: 8px;
+  padding: 0 5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.nday-chip-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.nday-chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.7rem;
+  color: #888;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nday-chip-remove:hover { color: #c62828; }
+
+/* 그룹 컨테이너 */
+.nday-groups-container {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+  height: 100%;
+}
+
+/* 그룹 카드 */
+.nday-group-card {
+  width: 300px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.nday-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nday-group-drag-handle {
+  cursor: grab;
+  color: #adb5bd;
+  font-size: 1rem;
+  flex-shrink: 0;
+  user-select: none;
+  line-height: 1;
+}
+.nday-group-drag-handle:active { cursor: grabbing; }
+
+.nday-group-card--dragging { opacity: 0.4; }
+
+.nday-group-card--drag-over {
+  outline: 2px dashed #1a73e8;
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.nday-group-name-input {
+  border: none;
+  border-bottom: 1px solid #ccc;
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 0;
+  padding: 1px 2px;
+  background: transparent;
+}
+
+.nday-group-name-input:focus {
+  outline: none;
+  border-bottom-color: #1a73e8;
+}
+
+/* 그룹 설정 */
+.nday-group-settings {
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nday-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nday-setting-lbl {
+  color: #666;
+  width: 26px;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+}
+
+.nday-loc-label {
+  flex: 1;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* 그룹 결과 */
+.nday-group-result {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.nday-result-summary {
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.nday-timeline-wrap {
+  font-size: 0.78rem;
+  overflow-x: auto;
+}
+
+.nday-timeline-wrap .timeline-table {
+  min-width: 260px;
+}
+
+
+/* 지도 클릭 선택 인디케이터 (패널 밖) */
+.nday-map-pick-indicator {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1600;
+  background: rgba(26,115,232,0.9);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 24px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* 패널로 돌아가기 버튼 (패널 밖) */
+.nday-map-back-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1600;
+  background: rgba(26,115,232,0.92);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 24px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+.nday-map-back-btn:hover { background: #1558b0; }
+
+/* ── 시군구 일괄이동 뱃지 바 ─────────────────────────────── */
+.nday-sgg-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 2px;
+  flex-shrink: 0;
+}
+
+.nday-sgg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  border: 1px solid #adb5bd;
+  background: #f1f3f5;
+  font-size: 0.72rem;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.nday-sgg-badge:hover {
+  filter: brightness(0.88);
+}
+
+.nday-sgg-badge--dragging {
+  opacity: 0.4;
+}
+
+.nday-sgg-badge span {
+  background: #6c757d;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+/* ── 시군구 팝오버 ───────────────────────────────────────── */
+.nday-sgg-popover {
+  position: fixed;
+  z-index: 10000;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  min-width: 150px;
+  overflow: hidden;
+}
+
+.nday-sgg-popover-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #555;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #f8f9fa;
+}
+
+.nday-sgg-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.nday-sgg-popover-item:hover { background: #e8f0fe; }
+
+.nday-sgg-popover-count {
+  margin-left: auto;
+  color: #888;
+  font-size: 0.72rem;
+}
+
 /* ── 인쇄 스타일 ─────────────────────────────────────────── */
 
 @media print {

@@ -11,6 +11,9 @@ import { initMultiday } from "./multiday.js";
 
 const LOCATIONS = window.LOCATIONS;
 
+const LABEL_MAP_SELECTED = "지도에서 선택됨";
+const LABEL_GPS_SELECTED = "현 위치로 선택됨";
+
 // ── 전역 상태 ────────────────────────────────────────────────────────────────
 export const state = {
   origin: null,       // { lat, lng, label }
@@ -66,7 +69,7 @@ ctxMenu.addEventListener("touchend", (e) => e.stopPropagation());
 
 ctxSetOrigin.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
-  state.origin = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: "지도 선택" };
+  state.origin = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED };
   setOriginMarker(_pendingCtxLatLng, _clearOrigin);
   updateOriginLabel();
   updateOptimizeButton();
@@ -79,7 +82,7 @@ ctxSetOrigin.addEventListener("click", () => {
 
 ctxSetDest.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
-  state.destination = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: "지도 선택" };
+  state.destination = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED };
   setDestMarker(_pendingCtxLatLng, _clearDest);
   updateDestLabel();
   hideContextMenu();
@@ -107,7 +110,7 @@ function setupGpsButton(btnId) {
         state.origin = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-          label: "현재 위치",
+          label: LABEL_GPS_SELECTED,
         };
         setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
         updateOriginLabel();
@@ -185,13 +188,20 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ── 라벨 업데이트 ─────────────────────────────────────────────────────────────
+const COORD_LABELS = new Set([LABEL_MAP_SELECTED, LABEL_GPS_SELECTED]);
+function _fmtCoord(o) {
+  return COORD_LABELS.has(o.label)
+    ? `${o.label} (${o.lat.toFixed(5)}, ${o.lng.toFixed(5)})`
+    : o.label;
+}
+
 export function updateOriginLabel() {
   const text = state.origin
-    ? `출발지: ${state.origin.label}`
-    : "출발지: 미지정 (지도 우클릭)";
+    ? `출발지: ${_fmtCoord(state.origin)}`
+    : "출발지: 미지정";
   document.getElementById("label-origin").textContent = text;
   const m = document.getElementById("label-origin-m");
-  if (m) m.textContent = text.replace("우클릭", "길게누르기");
+  if (m) m.textContent = text;
   const show = !!state.origin;
   ["btn-clear-origin", "btn-clear-origin-m"].forEach((id) => {
     const el = document.getElementById(id);
@@ -201,8 +211,8 @@ export function updateOriginLabel() {
 
 export function updateDestLabel() {
   const text = state.destination
-    ? `도착지: ${state.destination.label}`
-    : "도착지: 미지정 (Open TSP)";
+    ? `도착지: ${_fmtCoord(state.destination)}`
+    : "도착지: 미지정";
   ["label-destination", "label-destination-m"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -303,6 +313,25 @@ function resetAll() {
   }
 });
 
+// ── 자동 현재 위치 설정 (페이지 로드 시) ────────────────────────────────────
+function _autoSetCurrentLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const coord = { lat: pos.coords.latitude, lng: pos.coords.longitude, label: LABEL_GPS_SELECTED };
+      state.origin      = { ...coord };
+      state.destination = { ...coord };
+      setOriginMarker({ lat: coord.lat, lng: coord.lng }, _clearOrigin);
+      setDestMarker({ lat: coord.lat, lng: coord.lng }, _clearDest);
+      updateOriginLabel();
+      updateDestLabel();
+      updateOptimizeButton();
+    },
+    () => {}, // 실패 시 조용히 무시
+    { timeout: 8000 }
+  );
+}
+
 // ── 초기화 ────────────────────────────────────────────────────────────────────
 initMaps(LOCATIONS, showContextMenu);
 
@@ -326,4 +355,6 @@ window._multidayModule = _multidayModule;
   const el = document.getElementById(id);
   if (el) el.addEventListener("click", () => _multidayModule.runGrouping());
 });
+
+_autoSetCurrentLocation();
 
