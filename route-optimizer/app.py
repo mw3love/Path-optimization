@@ -142,6 +142,20 @@ with open(_LOCATIONS_PATH, encoding="utf-8") as f:
 
 _locations_lock = threading.Lock()
 
+# gunicorn 등 __main__ 블록이 실행되지 않는 환경에서 첫 요청 시 prefetch 시작
+_prefetch_started = False
+_prefetch_start_lock = threading.Lock()
+
+@app.before_request
+def _start_prefetch_once():
+    global _prefetch_started
+    if not _prefetch_started:
+        with _prefetch_start_lock:
+            if not _prefetch_started:
+                from prefetch import start_prefetch
+                start_prefetch(LOCATIONS)
+                _prefetch_started = True
+
 
 def _reload_locations(new_list: list):
     """LOCATIONS 전역 변수를 thread-safe하게 교체 (서버 재시작 불필요)."""
@@ -938,5 +952,6 @@ if __name__ == "__main__":
         print(f"  5. 이후 {proto}://{lan_ip}:5000 접속")
         print(f"  ─────────────────────────────────────────\n")
 
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True,
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=True,
             ssl_context=ssl_context)
