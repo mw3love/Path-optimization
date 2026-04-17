@@ -253,3 +253,48 @@ python app.py
 6. 스마트폰 브라우저 → 반응형 + 터치 선택 동작
 7. "내비로 보내기" → 카카오내비/T맵 실제 앱 경유지 포함 열림 확인
 8. OSRM 공개 서버 차단 시 폴백(Haversine) 동작 확인
+
+---
+
+## 구현 변경사항 (원안 대비)
+
+> 원안은 위에 그대로 유지. 실제 구현 과정에서 원안과 달라진 내용을 여기에 기록.
+
+### 변경사항
+
+| 항목 | 원안 | 실제 구현 |
+|------|------|-----------|
+| JS 파일 구조 | `static/js/app.js` 단일 파일 | 역할별 모듈 분리: `app.js`, `map.js`, `selection.js`, `optimize.js`, `timeline.js`, `admin.js` |
+| SSL 인증서 | 수동으로 `cert.pem`/`key.pem` 준비 | 앱 시작 시 LAN IP SAN 포함 자체 서명 인증서 자동 생성 |
+| `locations.json` 스키마 | `{id, seq, name, address, lat, lng}` | `sigungu` 필드 추가 — 시군구 색상 키로 사용 |
+| 카카오내비 경유지 | "가능한 범위 내" (미정) | 3개 초과 시 버튼 비활성 + 초과 안내 툴팁 |
+| 배포 프로토콜 | `http://` | `https://` (자동 인증서, GPS 기능 HTTPS 필수) |
+| 시군구 색상 키 | `address` 문자열에서 추출 | `sigungu` 필드 직접 사용 |
+
+### 추가 파일 (원안에 없던 것)
+
+- `prefetch.py`: 서버 기동 시 백그라운드 스레드로 전체 75×75 OSRM Table 미리 계산
+- `data_source.json`: 데이터 소스 메타데이터
+- `tools/xlsx_to_locations.py`: Excel/Google Sheets → `locations.json` 변환 CLI (`--xlsx`, `--gid`, `--strict` 등)
+- `templates/admin.html` + `static/js/admin.js`: 관리 페이지
+
+---
+
+## 추가 확장 기능 (원래 범위 밖)
+
+아래 기능은 PRD 원안의 "명시적으로 하지 않는 것" 범위를 넘지만, 운영 편의를 위해 추가됨.
+
+### N일 경로 계획 (`POST /api/optimize-multiday`)
+
+전체 미방문 지점을 N일에 걸쳐 자동 배분하고 각 날의 최적 순서를 계산.
+
+- `optimizer.py`의 `assign_days()`: Greedy Nearest-Neighbor로 날짜별 지점 배분
+- 프론트: `multiday.js` — 그룹 표시 → 날짜별 패널 설정 → 최종 계산 6단계 흐름
+
+### 관리 페이지 (`GET /admin`)
+
+서버 재시작 없이 지점 데이터를 교체할 수 있는 웹 UI.
+
+- Excel 파일 업로드 또는 Google Sheets ID 입력 → `locations.json` 즉시 갱신
+- `templates/admin.html` + `static/js/admin.js`
+- 내부용(운영자만 사용). 인증 없음.

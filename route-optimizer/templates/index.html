@@ -98,20 +98,24 @@
 <div id="app-mobile" class="d-flex d-md-none flex-column vh-100">
 
   <!-- 탭 헤더 -->
-  <ul class="nav nav-tabs nav-fill border-bottom" id="mobile-tabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="tab-list-btn" data-bs-toggle="tab"
-        data-bs-target="#tab-list" type="button" role="tab">목록</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-map-btn" data-bs-toggle="tab"
-        data-bs-target="#tab-map" type="button" role="tab">지도</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-result-btn" data-bs-toggle="tab"
-        data-bs-target="#tab-result" type="button" role="tab">경로</button>
-    </li>
-  </ul>
+  <div class="d-flex align-items-stretch border-bottom">
+    <ul class="nav nav-tabs nav-fill flex-grow-1 border-0" id="mobile-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-list-btn" data-bs-toggle="tab"
+          data-bs-target="#tab-list" type="button" role="tab">목록</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-map-btn" data-bs-toggle="tab"
+          data-bs-target="#tab-map" type="button" role="tab">지도</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-result-btn" data-bs-toggle="tab"
+          data-bs-target="#tab-result" type="button" role="tab">경로</button>
+      </li>
+    </ul>
+    <a href="/admin" class="btn btn-outline-secondary btn-sm rounded-0 border-0 border-start px-2"
+       style="font-size:0.75rem; white-space:nowrap;">&#128229; Import</a>
+  </div>
 
   <!-- 탭 콘텐츠 -->
   <div class="tab-content flex-grow-1 overflow-hidden">
