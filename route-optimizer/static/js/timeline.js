@@ -1,7 +1,6 @@
 /**
  * timeline.js — 타임라인 패널 렌더 + 번호 DivIcon 스타일
  */
-import { preparePrint } from "./map.js";
 
 export function renderTimeline(data, locations) {
   const html = _buildTimelineHtml(data, locations);
@@ -11,14 +10,12 @@ export function renderTimeline(data, locations) {
   if (panel && window.innerWidth >= 768) {
     panel.innerHTML = html;
     panel.classList.remove("d-none");
-    _attachPrintBtn(panel);
   }
 
   // 모바일: result-panel-m (경로 탭 내부)
   const panelM = document.getElementById("result-panel-m");
   if (panelM) {
     panelM.innerHTML = html;
-    _attachPrintBtn(panelM);
   }
 }
 
@@ -112,29 +109,18 @@ function _buildTimelineHtml(data, locations) {
   }
 
   // 합계 행
+  const _totalMin = (summary.total_drive_min || 0) + (summary.total_stay_min || 0);
   html += `<tr style="font-weight:bold;background:#f8f9fa;border-top:2px solid #dee2e6;">
     <td colspan="2">합계</td>
-    <td>${data.end ? summary.end_time || "" : ""}</td>
-    <td colspan="2">
-      이동 ${summary.total_drive_min != null ? _fmtMinutes(summary.total_drive_min) : "—"}
-      / ${summary.total_dist_km != null ? summary.total_dist_km + "km" : "—"}
+    <td colspan="3" style="font-size:0.85em;line-height:1.6;white-space:nowrap">
+      총 ${_totalMin > 0 ? _fmtMinShort(_totalMin) : "—"}&ensp;/&ensp;${summary.total_dist_km != null ? summary.total_dist_km + "km" : "—"}<br>
+      <span style="color:#666;font-weight:normal">이동 ${summary.total_drive_min != null ? _fmtMinShort(summary.total_drive_min) : "—"} + 체류 ${summary.total_stay_min != null ? _fmtMinShort(summary.total_stay_min) : "—"}</span>
     </td>
   </tr>`;
 
   html += `</tbody></table>`;
 
-  html += `<button class="btn btn-sm btn-outline-secondary mt-2 btn-print w-100">🖨️ 인쇄 미리보기</button>`;
-
   return html;
-}
-
-function _attachPrintBtn(container) {
-  container.querySelectorAll(".btn-print").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await preparePrint(); // 사이드바 숨김 + fitBounds + 타일 로딩 완료 대기
-      window.print();
-    });
-  });
 }
 
 function _fmtMinutes(min) {
@@ -142,6 +128,14 @@ function _fmtMinutes(min) {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return m === 0 ? `${h}시간(${min}분)` : `${h}시간 ${m}분(${min}분)`;
+}
+
+function _fmtMinShort(min) {
+  if (min == null || isNaN(min)) return "—";
+  if (min < 60) return `${min}분`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
 }
 
 function _subtractMinutes(timeStr, minutes) {

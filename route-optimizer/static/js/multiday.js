@@ -726,12 +726,6 @@ function _bindAccordion(panel, daysData, locations) {
       if (!isOpen) { body.classList.add("show"); hdr.setAttribute("aria-expanded", "true"); }
     });
   });
-  panel.querySelectorAll(".md-print-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      panel.querySelectorAll(".md-accordion-body").forEach((b) => b.classList.add("show"));
-      window.print();
-    });
-  });
 }
 
 function _hideResult() {
@@ -782,9 +776,6 @@ function _buildResultHtml(daysData, locations) {
       </div>`;
   });
 
-  html += `<div class="d-flex gap-2 mt-3">
-    <button class="btn btn-sm btn-outline-secondary flex-fill md-print-btn">🖨️ 인쇄</button>
-  </div>`;
 
   return html;
 }

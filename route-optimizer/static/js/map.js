@@ -45,59 +45,6 @@ const _boxSelectListeners = [];
 export function onBoxSelect(fn) { _boxSelectListeners.push(fn); }
 function _fireBoxSelect(ids) { _boxSelectListeners.forEach((fn) => fn(ids)); }
 
-// 인쇄 버튼에서 window.print() 호출 전 지도 준비
-// → print CSS와 동일한 레이아웃을 미리 적용해 SVG 위치 고정
-// → Promise 반환: 타일 로딩 완료 후 resolve
-export function preparePrint() {
-  return new Promise((resolve) => {
-    if (!_map) { resolve(); return; }
-    _map.closePopup();
-
-    const sidebar = document.getElementById("sidebar");
-    const mapEl   = _map.getContainer();
-
-    // print CSS가 할 일을 미리 적용
-    if (sidebar) sidebar.style.display = "none";
-    mapEl.style.height = "560px";
-
-    // 인쇄 후 원상복구
-    window.addEventListener("afterprint", () => {
-      if (sidebar) sidebar.style.display = "";
-      mapEl.style.height = "";
-      _map.invalidateSize({ animate: false });
-    }, { once: true });
-
-    // 2프레임 후 크기 재계산 → fitBounds → 타일 완전 로딩 대기 후 resolve
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        _map.invalidateSize({ animate: false });
-
-        if (_lastResultBounds) {
-          _map.fitBounds(_lastResultBounds, { padding: [30, 30], animate: false });
-        }
-
-        // 타일이 모두 로딩될 때까지 대기 (최대 2초)
-        const tileLayer = _map._layers && Object.values(_map._layers).find(l => l._url);
-        let settled = false;
-
-        const done = () => {
-          if (settled) return;
-          settled = true;
-          resolve();
-        };
-
-        if (tileLayer && tileLayer._loading) {
-          tileLayer.once("load", done);
-          setTimeout(done, 2000); // 최대 2초 타임아웃
-        } else {
-          // 타일 이미 로딩됨 — 한 프레임 더 기다려 페인트 완료 보장
-          requestAnimationFrame(done);
-        }
-      });
-    });
-  });
-}
-
 export function enableBoxSelect(active) {
   _boxSelectActive = active;
   document.querySelectorAll(".box-select-capture").forEach((el) => {
@@ -143,19 +90,6 @@ export function initMaps(locations, onContextMenu) {
   _renderMarkers(locations);
   _attachBoxSelect(_map);
   _attachBoxSelect(_mapMobile);
-
-  // Ctrl+P 직접 인쇄 시: 인쇄 버튼 경로와 동일하게 preparePrint() 호출
-  // (beforeprint는 동기라 await 불가 — 최선의 동기 처리)
-  window.addEventListener("beforeprint", () => {
-    if (!_map) return;
-    _map.closePopup();
-    const mapEl = _map.getContainer();
-    mapEl.style.height = "560px";
-    _map.invalidateSize({ animate: false });
-    if (_lastResultBounds) {
-      _map.fitBounds(_lastResultBounds, { padding: [30, 30], animate: false });
-    }
-  });
 
   return { map: _map, mapMobile: _mapMobile };
 }
@@ -264,7 +198,6 @@ export function clearOriginMarker() {
 
 // ── 결과 마커/경로선 ──────────────────────────────────────────────────────────
 const _resultLayers = [];
-let _lastResultBounds = null; // 인쇄 시 fitBounds 재호출용
 
 export function clearResultLayers() {
   _resultLayers.forEach((l) => {
@@ -272,7 +205,6 @@ export function clearResultLayers() {
     _mapMobile.removeLayer(l.m);
   });
   _resultLayers.length = 0;
-  _lastResultBounds = null;
 }
 
 export function addNumberedMarker(latlng, num, color = "#1a73e8") {
@@ -284,9 +216,6 @@ export function addNumberedMarker(latlng, num, color = "#1a73e8") {
   const d = L.marker(latlng, { icon }).addTo(_map);
   const m = L.marker(latlng, { icon: L.divIcon({ ...icon.options }) }).addTo(_mapMobile);
   _resultLayers.push({ d, m });
-  // 인쇄 bounds에 번호 마커 좌표 포함
-  if (!_lastResultBounds) _lastResultBounds = L.latLngBounds(latlng, latlng);
-  else _lastResultBounds.extend(latlng);
 }
 
 export function drawPolyline(coords, color = "#1a73e8") {
@@ -295,10 +224,7 @@ export function drawPolyline(coords, color = "#1a73e8") {
   const d = L.polyline(coords, style).addTo(_map);
   const m = L.polyline(coords, style).addTo(_mapMobile);
   _resultLayers.push({ d, m });
-  const pb = d.getBounds();
-  if (!_lastResultBounds) _lastResultBounds = pb;
-  else _lastResultBounds.extend(pb);
-  _map.fitBounds(_lastResultBounds, { padding: [40, 40] });
+  _map.fitBounds(d.getBounds(), { padding: [40, 40] });
   _mapMobile.fitBounds(m.getBounds(), { padding: [40, 40] });
 }
 
