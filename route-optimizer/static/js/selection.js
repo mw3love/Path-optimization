@@ -2,6 +2,7 @@
  * selection.js — 지점 목록 체크박스, 시군구 필터, 검색, 마커 ↔ 사이드바 양방향 동기화
  */
 import { getSigunguColor, setMarkerSelected, panToLocation } from "./map.js";
+import { openShareDialog } from "./sharing_ui.js";
 
 let _locations = [];
 let _state = null;
@@ -194,13 +195,25 @@ function _createListItem(loc) {
   info.appendChild(nameEl);
   info.appendChild(subEl);
 
+  const shareBtn = document.createElement("button");
+  shareBtn.type = "button";
+  shareBtn.className = "btn btn-link btn-sm p-0 loc-share-btn";
+  shareBtn.title = "공유 설정";
+  shareBtn.textContent = "🔗";
+  shareBtn.style.cssText = "flex-shrink:0;text-decoration:none;";
+  shareBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openShareDialog(loc.id, loc.is_public, []);
+  });
+
   div.appendChild(cb);
   div.appendChild(colorDot);
   div.appendChild(info);
+  div.appendChild(shareBtn);
 
-  // 행 클릭(체크박스 제외)으로도 토글
+  // 행 클릭(체크박스·공유 버튼 제외)으로도 토글
   div.addEventListener("click", (e) => {
-    if (e.target === cb) return;
+    if (e.target === cb || e.target === shareBtn) return;
     if (e.shiftKey && _lastClickedId !== null) {
       _shiftSelect(loc.id);
     } else {
