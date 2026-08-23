@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>로그인 — 경로 최적화</title>
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css" />
+</head>
+<body class="d-flex align-items-center justify-content-center vh-100 bg-light">
+  <div class="card shadow-sm" style="width: 320px;">
+    <div class="card-body">
+      <h5 class="card-title mb-3">사내 이메일로 로그인</h5>
+      <input type="email" id="email-input" class="form-control mb-2" placeholder="you@company.com" />
+      <button id="btn-request" class="btn btn-primary w-100">로그인 링크 받기</button>
+      <div id="msg" class="small text-muted mt-2"></div>
+    </div>
+  </div>
+  <script>
+    document.getElementById("btn-request").addEventListener("click", async () => {
+      const email = document.getElementById("email-input").value.trim();
+      const msg = document.getElementById("msg");
+      msg.textContent = "전송 중...";
+      const resp = await fetch("/auth/request-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await resp.json();
+      msg.textContent = resp.ok
+        ? "로그인 링크를 발송했습니다. (개발 모드: 서버 콘솔 로그 확인)"
+        : (data.error || "오류가 발생했습니다");
+    });
+  </script>
+</body>
+</html>

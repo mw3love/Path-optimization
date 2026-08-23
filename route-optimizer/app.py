@@ -20,9 +20,15 @@ import datetime as dt
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, render_template_string, request, Response
+from flask import (
+    Flask, jsonify, render_template, render_template_string,
+    request, Response, session, redirect, url_for,
+)
 from distance_matrix import get_matrix, fetch_route_geometry
 from optimizer import solve, assign_days
+from db import get_connection, init_db
+import auth
+import locations_repo as locrepo
 
 
 # ── 자동 SSL 인증서 생성 ────────────────────────────────────────────────────────
@@ -123,6 +129,27 @@ def ensure_ssl_cert(base_dir: Path) -> str:
     return lan_ip
 
 app = Flask(__name__)
+
+app.secret_key = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
+if app.secret_key == "dev-insecure-key-change-me":
+    print("[WARN] SECRET_KEY 환경변수가 설정되지 않아 개발용 기본값을 사용합니다. 운영 배포 전 반드시 설정하세요.")
+
+init_db()
+
+
+@app.before_request
+def _open_db():
+    from flask import g
+    g.db = get_connection()
+
+
+@app.teardown_appcontext
+def _close_db(exception=None):
+    from flask import g
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
 
 @app.after_request
 def no_cache_static(response):
@@ -656,6 +683,59 @@ def health():
         "osrm": osrm_status,
         "matrix_cache": matrix_info,
         "locations_count": len(LOCATIONS),
+    })
+
+
+# ── 인증 라우트 ──────────────────────────────────────────────────────────────────
+
+@app.route("/login")
+def login_page():
+    return render_template("login.html")
+
+
+@app.route("/auth/request-link", methods=["POST"])
+def auth_request_link():
+    from flask import g
+    body = request.get_json(force=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"error": "올바른 이메일을 입력하세요"}), 400
+
+    # 이메일 열거 공격 방지: 허용 도메인이 아니어도 응답은 성공 시와 동일하게 유지한다
+    # (스펙의 에러 처리 항목 — 발급 여부로 사내 이메일 존재 여부를 노출하지 않기 위함).
+    if auth.is_allowed_email(email):
+        token = auth.create_token(g.db, email)
+        link = f"{request.url_root.rstrip('/')}/auth/verify?token={token}"
+        auth.send_magic_link(email, link)
+
+    return jsonify({"ok": True})
+
+
+@app.route("/auth/verify")
+def auth_verify():
+    from flask import g
+    token = request.args.get("token", "")
+    email = auth.verify_token(g.db, token)
+    if not email:
+        return "링크가 만료되었거나 이미 사용되었습니다. 다시 로그인해주세요.", 400
+
+    user_id = auth.get_or_create_user(g.db, email)
+    session["user_email"] = email
+    session["user_id"] = user_id
+    return redirect(url_for("index"))
+
+
+@app.route("/auth/logout", methods=["POST"])
+def auth_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/session")
+def api_session():
+    return jsonify({
+        "email": session.get("user_email"),
+        "user_id": session.get("user_id"),
     })
 
 
