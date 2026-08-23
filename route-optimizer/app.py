@@ -739,6 +739,86 @@ def api_session():
     })
 
 
+# ── 지점 라우트 ──────────────────────────────────────────────────────────────────
+
+@app.route("/api/locations", methods=["GET"])
+@auth.login_required
+def api_locations_list():
+    from flask import g
+    rows = locrepo.list_visible_locations(g.db, session["user_id"], session["user_email"])
+    return jsonify({"locations": rows})
+
+
+@app.route("/api/locations", methods=["POST"])
+@auth.login_required
+def api_locations_create():
+    from flask import g
+    body = request.get_json(force=True) or {}
+    name = (body.get("name") or "").strip()
+    lat, lng = body.get("lat"), body.get("lng")
+    source = body.get("source", "map_click")
+    if not name or lat is None or lng is None:
+        return jsonify({"error": "name, lat, lng는 필수입니다"}), 400
+    if source not in ("geocode", "gps", "map_click"):
+        return jsonify({"error": f"알 수 없는 source: {source}"}), 400
+
+    loc_id = locrepo.create_location(
+        g.db, session["user_id"], name, body.get("address", ""), float(lat), float(lng), source
+    )
+    return jsonify({"id": loc_id}), 201
+
+
+@app.route("/api/locations/<int:location_id>/share", methods=["POST"])
+@auth.login_required
+def api_locations_share(location_id):
+    from flask import g
+    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
+        return jsonify({"error": "본인 소유 지점만 공유할 수 있습니다"}), 403
+    body = request.get_json(force=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"error": "올바른 이메일을 입력하세요"}), 400
+    locrepo.add_share(g.db, location_id, email)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/locations/<int:location_id>/share/<string:email>", methods=["DELETE"])
+@auth.login_required
+def api_locations_unshare(location_id, email):
+    from flask import g
+    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
+        return jsonify({"error": "본인 소유 지점만 관리할 수 있습니다"}), 403
+    locrepo.remove_share(g.db, location_id, email.strip().lower())
+    return jsonify({"ok": True})
+
+
+@app.route("/api/locations/<int:location_id>/visibility", methods=["PATCH"])
+@auth.login_required
+def api_locations_visibility(location_id):
+    from flask import g
+    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
+        return jsonify({"error": "본인 소유 지점만 관리할 수 있습니다"}), 403
+    body = request.get_json(force=True) or {}
+    locrepo.set_public(g.db, location_id, bool(body.get("is_public")))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/geocode")
+@auth.login_required
+def api_geocode():
+    import geocode
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"results": []})
+    if not geocode.is_configured():
+        return jsonify({"error": "주소 검색이 설정되지 않았습니다. GPS나 지도 클릭으로 추가하세요."}), 503
+    try:
+        results = geocode.search(q)
+    except Exception as e:
+        return jsonify({"error": f"검색 실패: {e}"}), 502
+    return jsonify({"results": results})
+
+
 # ── 관리 페이지 헬퍼 ────────────────────────────────────────────────────────────
 
 def _parse_gsheet_url(url: str) -> tuple:
