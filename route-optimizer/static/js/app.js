@@ -9,6 +9,7 @@ import { initSelection, clearSelection, selectByIds } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
 import { fetchLocations, logout } from "./auth.js";
+import { initLocationsUi, openAddLocationModalAt } from "./locations_ui.js";
 
 let LOCATIONS = [];
 
@@ -50,6 +51,7 @@ let _ctxJustShown = false;
 
 function showContextMenu(latlng, pageX, pageY) {
   _pendingCtxLatLng = latlng;
+  window._pendingCtxLatLngForAdd = latlng; // locations_ui.js에서 참조
   ctxMenu.style.left = `${pageX}px`;
   ctxMenu.style.top  = `${pageY}px`;
   ctxMenu.classList.remove("d-none");
@@ -350,6 +352,10 @@ async function _init() {
   });
 
   initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton });
+
+  initLocationsUi(() => LOCATIONS, () => {
+    updateSelectionSummary();
+  });
 
   window._optimizeModule = initOptimize(state, LOCATIONS);
 

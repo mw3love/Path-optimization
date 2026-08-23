@@ -241,7 +241,25 @@
   <ul class="list-unstyled mb-0">
     <li><button id="ctx-set-origin" class="ctx-menu-item">📍 여기서 출발</button></li>
     <li><button id="ctx-set-dest" class="ctx-menu-item">🏁 여기서 종료</button></li>
+    <li><button id="ctx-add-location" class="ctx-menu-item">➕ 여기에 장소 추가</button></li>
   </ul>
+</div>
+
+<!-- 장소 추가 모달 -->
+<div id="add-location-modal" class="d-none add-location-modal">
+  <div class="add-location-card">
+    <h6 class="mb-2">장소 추가</h6>
+    <input type="search" id="add-loc-search" class="form-control form-control-sm mb-1"
+      placeholder="주소·장소명 검색" />
+    <div id="add-loc-search-results" class="add-loc-search-results"></div>
+    <input type="text" id="add-loc-name" class="form-control form-control-sm mt-2" placeholder="장소 이름" />
+    <input type="text" id="add-loc-address" class="form-control form-control-sm mt-1" placeholder="주소(선택)" />
+    <div class="small text-muted mt-1" id="add-loc-coord"></div>
+    <div class="d-flex gap-2 mt-2">
+      <button id="add-loc-save" class="btn btn-primary btn-sm flex-grow-1">저장</button>
+      <button id="add-loc-cancel" class="btn btn-outline-secondary btn-sm flex-grow-1">취소</button>
+    </div>
+  </div>
 </div>
 
 <!-- 로딩 오버레이 -->

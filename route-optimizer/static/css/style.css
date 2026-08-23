@@ -948,3 +948,33 @@ html, body {
   font-size: 0.72rem;
 }
 
+.add-location-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.add-location-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  width: 320px;
+  max-width: 90vw;
+}
+.add-loc-search-results {
+  max-height: 160px;
+  overflow-y: auto;
+}
+.add-loc-search-results .result-item {
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+.add-loc-search-results .result-item:hover {
+  background: #f0f0f0;
+}
+

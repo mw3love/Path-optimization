@@ -132,6 +132,12 @@ function _addLocationMarker(loc) {
   _markers[loc.id] = { marker, markerM };
 }
 
+// 외부(다른 모듈)에서 새로 추가된 지점 마커를 즉시 그릴 때 사용
+export function addLocationMarker(loc) {
+  getSigunguColor(loc.sigungu || "");
+  _addLocationMarker(loc);
+}
+
 // ── 마커 강조/해제 ────────────────────────────────────────────────────────────
 export function setMarkerSelected(id, selected) {
   const entry = _markers[id];
