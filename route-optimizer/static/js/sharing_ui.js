@@ -3,8 +3,14 @@
  */
 
 function _buildDialog() {
+  // 재오픈 시 이전 공유 다이얼로그가 남아 있으면 제거(DOM id 중복 방지).
+  // locations_ui.js의 추가 모달은 "add-location-modal" 클래스만 갖고 id가 없으므로,
+  // 공유 다이얼로그에만 붙는 data-role로 구분해 그것만 제거한다.
+  document.querySelectorAll('.add-location-modal[data-role="share-dialog"]').forEach((el) => el.remove());
+
   const overlay = document.createElement("div");
   overlay.className = "add-location-modal"; // 기존 모달 스타일 재사용
+  overlay.dataset.role = "share-dialog";
   overlay.innerHTML = `
     <div class="add-location-card">
       <h6 class="mb-2">공유 설정</h6>
@@ -31,11 +37,24 @@ function _renderEmailList(overlay, locationId, emails) {
   emails.forEach((email) => {
     const li = document.createElement("li");
     li.className = "d-flex justify-content-between align-items-center";
-    li.innerHTML = `<span>${email}</span><button class="btn btn-link btn-sm p-0 text-danger">✕</button>`;
-    li.querySelector("button").addEventListener("click", async () => {
-      await fetch(`/api/locations/${locationId}/share/${encodeURIComponent(email)}`, { method: "DELETE" });
+
+    const span = document.createElement("span");
+    span.textContent = email; // innerHTML 대신 textContent로 stored-XSS 방지
+
+    const btn = document.createElement("button");
+    btn.className = "btn btn-link btn-sm p-0 text-danger";
+    btn.textContent = "✕";
+    btn.addEventListener("click", async () => {
+      const resp = await fetch(`/api/locations/${locationId}/share/${encodeURIComponent(email)}`, { method: "DELETE" });
+      if (!resp.ok) {
+        alert("공유 해제에 실패했습니다. 다시 시도해주세요.");
+        return; // 실패 시 목록에서 제거하지 않음(서버 상태와 UI 불일치 방지)
+      }
       li.remove();
     });
+
+    li.appendChild(span);
+    li.appendChild(btn);
     list.appendChild(li);
   });
 }
@@ -46,11 +65,15 @@ export async function openShareDialog(locationId, currentIsPublic, currentShares
   _renderEmailList(overlay, locationId, currentShares || []);
 
   overlay.querySelector("#share-public-toggle").addEventListener("change", async (e) => {
-    await fetch(`/api/locations/${locationId}/visibility`, {
+    const resp = await fetch(`/api/locations/${locationId}/visibility`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_public: e.target.checked }),
     });
+    if (!resp.ok) {
+      e.target.checked = !e.target.checked; // 실패 시 이전 상태로 되돌림
+      alert("공개 설정 변경에 실패했습니다. 다시 시도해주세요.");
+    }
   });
 
   overlay.querySelector("#share-email-add").addEventListener("click", async () => {

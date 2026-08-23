@@ -5,7 +5,7 @@ import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
          onMarkerClick, invalidateMobileMapSize,
          enableBoxSelect, onBoxSelect } from "./map.js";
-import { initSelection, clearSelection, selectByIds } from "./selection.js";
+import { initSelection, clearSelection, selectByIds, refreshLocationList } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
 import { fetchLocations, logout } from "./auth.js";
@@ -353,7 +353,8 @@ async function _init() {
 
   initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton });
 
-  initLocationsUi(() => LOCATIONS, () => {
+  initLocationsUi(() => LOCATIONS, (newLoc) => {
+    refreshLocationList(newLoc);
     updateSelectionSummary();
   });
 

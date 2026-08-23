@@ -16,6 +16,12 @@ let _searchQuery = "";
 // Shift-클릭 범위 선택용: 마지막으로 클릭한 지점 ID
 let _lastClickedId = null;
 
+// 시군구가 없는(빈 문자열) 지점은 필터 배지에서 공유 "기타" 그룹으로 묶는다
+const OTHER_SGG = "기타";
+function _filterKey(loc) {
+  return loc.sigungu || OTHER_SGG;
+}
+
 export function initSelection(locations, state, callbacks) {
   _locations = locations;
   _state = state;
@@ -32,7 +38,7 @@ export function initSelection(locations, state, callbacks) {
 // ── 시군구 필터 ───────────────────────────────────────────────────────────────
 
 function _buildFilters() {
-  _allSigungu = [...new Set(_locations.map((l) => l.sigungu))].sort();
+  _allSigungu = [...new Set(_locations.map(_filterKey))].sort();
   // 초기 상태: 전체 표시
   _allSigungu.forEach((sgg) => _activeFilters.add(sgg));
 
@@ -73,6 +79,27 @@ function _buildFilters() {
       const visible = _visibleLocations();
       visible.forEach((loc) => _setSelected(loc.id, shouldSelect));
     });
+  });
+}
+
+// 새 시군구 그룹 하나를 필터 배지에 추가 등록(기존 배지의 on/off 상태는 건드리지 않음)
+function _registerFilterKey(sgg) {
+  if (_allSigungu.includes(sgg)) return;
+  _allSigungu.push(sgg);
+  _allSigungu.sort();
+  _activeFilters.add(sgg); // 새 그룹은 기본적으로 표시 상태
+
+  ["sigungu-filters", "sigungu-filters-m"].forEach((containerId) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const badge = document.createElement("span");
+    badge.className = "sigungu-badge";
+    badge.textContent = sgg;
+    badge.style.background = getSigunguColor(sgg);
+    badge.dataset.sgg = sgg;
+    badge.title = `${sgg} 필터`;
+    badge.addEventListener("click", () => _toggleFilter(sgg));
+    container.appendChild(badge);
   });
 }
 
@@ -130,7 +157,7 @@ function _buildList() {
 
 function _visibleLocations() {
   return _locations.filter((loc) => {
-    if (!_activeFilters.has(loc.sigungu)) return false;
+    if (!_activeFilters.has(_filterKey(loc))) return false;
     if (_searchQuery) {
       const haystack = (loc.name + " " + loc.address + " " + loc.sigungu).toLowerCase();
       if (!haystack.includes(_searchQuery)) return false;
@@ -186,11 +213,11 @@ function _createListItem(loc) {
 
   const nameEl = document.createElement("div");
   nameEl.className = "loc-name";
-  nameEl.textContent = `${loc.seq}. ${loc.name}`;
+  nameEl.textContent = loc.seq ? `${loc.seq}. ${loc.name}` : loc.name;
 
   const subEl = document.createElement("div");
   subEl.className = "loc-sub";
-  subEl.textContent = loc.sigungu;
+  subEl.textContent = loc.sigungu || "";
 
   info.appendChild(nameEl);
   info.appendChild(subEl);
@@ -203,7 +230,7 @@ function _createListItem(loc) {
   shareBtn.style.cssText = "flex-shrink:0;text-decoration:none;";
   shareBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    openShareDialog(loc.id, loc.is_public, []);
+    openShareDialog(loc.id, loc.is_public, loc.shares || []);
   });
 
   div.appendChild(cb);
@@ -287,6 +314,13 @@ function _syncListHighlight(id, selected) {
   });
 }
 
+// 지점이 새로 추가된 뒤(locations_ui.js) 사이드바 목록/필터를 갱신할 때 사용.
+// newLoc을 전달하면 새 시군구 필터 배지를 (기존 on/off 상태 보존하며) 등록한다.
+export function refreshLocationList(newLoc) {
+  if (newLoc) _registerFilterKey(_filterKey(newLoc));
+  _renderList();
+}
+
 // 박스 선택 등 외부에서 ID 목록으로 선택
 export function selectByIds(ids) {
   ids.forEach((id) => _setSelected(id, true));
@@ -311,7 +345,7 @@ export function toggleById(id) {
 
   // 해당 항목이 목록에 없으면(필터됨) 전체 지역 표시로 복원
   const loc = _locations.find((l) => l.id === id);
-  if (loc && !_activeFilters.has(loc.sigungu)) {
+  if (loc && !_activeFilters.has(_filterKey(loc))) {
     _allSigungu.forEach((sgg) => _activeFilters.add(sgg));
     _updateFilterBadges();
     _renderList();

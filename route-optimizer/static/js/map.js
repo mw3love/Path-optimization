@@ -31,7 +31,7 @@ export function getAllSigunguColors() {
 let _map = null;
 let _mapMobile = null;
 
-// 마커 저장: id → { marker, markerM }
+// 마커 저장: id → { marker, markerM, sigungu }
 const _markers = {};
 
 // 컨텍스트 메뉴 콜백
@@ -116,7 +116,8 @@ function _addLocationMarker(loc) {
     weight: 1.5,
   };
 
-  const popup = `<b>${loc.seq}. ${loc.name}</b><br/><span class="text-muted small">${loc.sigungu}</span><br/><small>${loc.address}</small>`;
+  const title = loc.seq ? `${loc.seq}. ${loc.name}` : loc.name;
+  const popup = `<b>${title}</b><br/><span class="text-muted small">${loc.sigungu || ""}</span><br/><small>${loc.address}</small>`;
 
   const marker = L.circleMarker([loc.lat, loc.lng], opts)
     .addTo(_map)
@@ -129,7 +130,7 @@ function _addLocationMarker(loc) {
   marker.on("click", () => _fireMarkerClick(loc.id));
   markerM.on("click", () => _fireMarkerClick(loc.id));
 
-  _markers[loc.id] = { marker, markerM };
+  _markers[loc.id] = { marker, markerM, sigungu: loc.sigungu || "" };
 }
 
 // 외부(다른 모듈)에서 새로 추가된 지점 마커를 즉시 그릴 때 사용
@@ -142,9 +143,7 @@ export function addLocationMarker(loc) {
 export function setMarkerSelected(id, selected) {
   const entry = _markers[id];
   if (!entry) return;
-  const color = selected ? "#ff6600" : getSigunguColor(
-    window.LOCATIONS.find((l) => l.id === id)?.sigungu ?? ""
-  );
+  const color = selected ? "#ff6600" : getSigunguColor(entry.sigungu ?? "");
   const weight = selected ? 3 : 1.5;
   const radius = selected ? 9 : 7;
   [entry.marker, entry.markerM].forEach((m) => {
