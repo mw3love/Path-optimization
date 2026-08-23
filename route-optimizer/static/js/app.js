@@ -8,8 +8,11 @@ import { initMaps, setOriginMarker, setDestMarker,
 import { initSelection, clearSelection, selectByIds } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
+import { fetchLocations, logout } from "./auth.js";
 
-const LOCATIONS = window.LOCATIONS;
+let LOCATIONS = [];
+
+document.getElementById("btn-logout")?.addEventListener("click", logout);
 
 const LABEL_MAP_SELECTED = "지도에서 선택됨";
 const LABEL_GPS_SELECTED = "현 위치로 선택됨";
@@ -332,29 +335,34 @@ function _autoSetCurrentLocation() {
   );
 }
 
-// ── 초기화 ────────────────────────────────────────────────────────────────────
-initMaps(LOCATIONS, showContextMenu);
+// ── 초기화 (비동기: 지점 목록을 먼저 받아온 뒤 지도/선택/최적화 모듈을 구성) ──
+async function _init() {
+  LOCATIONS = await fetchLocations();
 
-// 지도 탭 전환 시 invalidateSize (CSS visibility 방식에서도 안전을 위해 유지)
-document.getElementById("tab-map-btn")?.addEventListener("click", () => {
-  setTimeout(() => invalidateMobileMapSize(), 50);
-});
+  initMaps(LOCATIONS, showContextMenu);
 
-onMarkerClick((id) => {
-  if (window._selectionModule) window._selectionModule.toggleById(id);
-});
+  document.getElementById("tab-map-btn")?.addEventListener("click", () => {
+    setTimeout(() => invalidateMobileMapSize(), 50);
+  });
 
-initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton });
+  onMarkerClick((id) => {
+    if (window._selectionModule) window._selectionModule.toggleById(id);
+  });
 
-window._optimizeModule = initOptimize(state, LOCATIONS);
+  initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton });
 
-const _multidayModule = initMultiday(state, LOCATIONS);
-window._multidayModule = _multidayModule;
+  window._optimizeModule = initOptimize(state, LOCATIONS);
 
-["btn-multiday", "btn-multiday-m"].forEach((id) => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener("click", () => _multidayModule.runGrouping());
-});
+  const _multidayModule = initMultiday(state, LOCATIONS);
+  window._multidayModule = _multidayModule;
 
-_autoSetCurrentLocation();
+  ["btn-multiday", "btn-multiday-m"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("click", () => _multidayModule.runGrouping());
+  });
+
+  _autoSetCurrentLocation();
+}
+
+_init();
 
