@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="auto">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>전파조사 경로 최적화 — 기술 아키텍처</title>
+<style>
+/* ── 시맨틱 색상 변수 (라이트) ── */
+:root {
+  --bg-page:    #F1F5F9;
+  --bg-surface: #FFFFFF;
+  --bg-surface2:#F8FAFC;
+  --bg-code:    #F1F5F9;
+  --border:     #E2E8F0;
+  --border-d:   #E2E8F0;   /* dashed border */
+  --text-1:     #0F172A;
+  --text-2:     #475569;
+  --text-3:     #64748B;
+  --text-muted: #94A3B8;
+
+  /* 액센트 (공통) */
+  --fe:      #4F46E5;
+  --be:      #059669;
+  --data:    #B45309;
+  --ext:     #7C3AED;
+  --algo:    #DC2626;
+
+  /* 액센트 배경·보더 (라이트) */
+  --fe-bg:   #EEF2FF; --fe-bd:  #C7D2FE;
+  --be-bg:   #ECFDF5; --be-bd:  #A7F3D0;
+  --data-bg: #FFFBEB; --data-bd:#FDE68A;
+  --ext-bg:  #F5F3FF; --ext-bd: #DDD6FE;
+  --algo-bg: #FFF1F2; --algo-bd:#FECACA;
+
+  /* 칩 텍스트 (라이트) */
+  --fe-t:    var(--fe);
+  --be-t:    var(--be);
+  --data-t:  var(--data);
+  --ext-t:   var(--ext);
+  --algo-t:  var(--algo);
+
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --r: 12px;
+}
+
+/* ── 다크 모드 변수 ── */
+[data-theme="dark"] {
+  --bg-page:    #0D1117;
+  --bg-surface: #161B22;
+  --bg-surface2:#1C2333;
+  --bg-code:    #0D1117;
+  --border:     #30363D;
+  --border-d:   #21262D;
+  --text-1:     #E6EDF3;
+  --text-2:     #8B949E;
+  --text-3:     #8B949E;
+  --text-muted: #484F58;
+
+  --fe-bg:   #1C1F3A; --fe-bd:  #3730A3;
+  --be-bg:   #0D2818; --be-bd:  #065F46;
+  --data-bg: #2A1800; --data-bd:#92400E;
+  --ext-bg:  #1E1635; --ext-bd: #4C1D95;
+  --algo-bg: #2A0A0A; --algo-bd:#7F1D1D;
+
+  --fe-t:    #818CF8;
+  --be-t:    #34D399;
+  --data-t:  #FCD34D;
+  --ext-t:   #A78BFA;
+  --algo-t:  #FCA5A5;
+
+  --shadow: 0 2px 16px rgba(0,0,0,0.5);
+}
+
+/* ── 리셋 & 베이스 ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;
+  background: var(--bg-page);
+  color: var(--text-1);
+  line-height: 1.7;
+  font-size: 15px;
+  transition: background .25s, color .25s;
+}
+
+.page { max-width: 980px; margin: 0 auto; padding: 48px 20px 80px; }
+section { margin-bottom: 64px; }
+
+.sec-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+}
+h2 { font-size: 22px; font-weight: 800; color: var(--text-1); margin-bottom: 20px; }
+p.lead { color: var(--text-2); margin-bottom: 20px; }
+strong { color: var(--text-1); }
+
+/* ── 다크모드 토글 버튼 ── */
+#theme-toggle {
+  position: fixed; top: 20px; right: 20px; z-index: 1000;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  box-shadow: var(--shadow); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; transition: all .2s; user-select: none;
+}
+#theme-toggle:hover { transform: scale(1.1); }
+
+/* ── Hero ── */
+.hero {
+  background: linear-gradient(135deg,#1E293B 0%,#0F172A 100%);
+  border-radius: 20px; padding: 48px; margin-bottom: 60px;
+  color: #fff; position: relative; overflow: hidden;
+}
+[data-theme="dark"] .hero {
+  background: linear-gradient(135deg,#1C2333 0%,#0D1117 100%);
+  border: 1px solid var(--border);
+}
+.hero::before {
+  content:''; position:absolute; top:-80px; right:-80px;
+  width:360px; height:360px;
+  background: radial-gradient(circle,rgba(79,70,229,.35) 0%,transparent 70%);
+  border-radius:50%;
+}
+.hero-tag {
+  display:inline-block; background:rgba(79,70,229,.4); color:#A5B4FC;
+  font-size:12px; font-weight:700; letter-spacing:.08em;
+  padding:4px 14px; border-radius:20px; margin-bottom:16px;
+}
+.hero h1 { font-size:32px; font-weight:900; line-height:1.2; margin-bottom:14px; }
+.hero .sub { color:#94A3B8; font-size:15px; max-width:580px; }
+.hero-stats { display:flex; gap:36px; margin-top:28px; flex-wrap:wrap; }
+.stat-num { font-size:26px; font-weight:800; color:#fff; }
+.stat-lbl { font-size:11px; color:#94A3B8; }
+
+/* ── Architecture ── */
+.arch-wrap {
+  background: var(--bg-surface);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.arch-layer {
+  padding: 24px 28px;
+  border-bottom: 1px dashed var(--border-d);
+}
+.arch-layer:last-child { border-bottom: none; }
+.layer-title {
+  font-size: 12px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.layer-desc { font-size: 13px; color: var(--text-2); }
+
+.chip {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: 12px; padding: 2px 8px; border-radius: 5px;
+  margin: 3px 3px 3px 0; border: 1px solid;
+}
+.chip.fe  { background:var(--fe-bg);   color:var(--fe-t);   border-color:var(--fe-bd); }
+.chip.be  { background:var(--be-bg);   color:var(--be-t);   border-color:var(--be-bd); }
+.chip.ext { background:var(--ext-bg);  color:var(--ext-t);  border-color:var(--ext-bd); }
+.chip.data{ background:var(--data-bg); color:var(--data-t); border-color:var(--data-bd); }
+
+.arch-arrow {
+  display:flex; align-items:center; justify-content:center;
+  padding:8px 0; background:var(--bg-surface2);
+  border-bottom:1px dashed var(--border-d);
+}
+.arch-arrow span {
+  font-size:11px; font-weight:600; color:var(--text-3);
+  background:var(--border); padding:3px 12px; border-radius:20px;
+}
+.arch-arrow-split {
+  display:grid; grid-template-columns:1fr 1fr;
+  background:var(--bg-surface2); border-bottom:1px dashed var(--border-d);
+}
+.arch-arrow-half {
+  display:flex; align-items:center; justify-content:center; padding:8px 0;
+}
+.arch-arrow-half:first-child { border-right:1px dashed var(--border-d); }
+.arch-arrow-half span {
+  font-size:11px; font-weight:600; color:var(--text-3);
+  background:var(--border); padding:3px 10px; border-radius:20px;
+}
+.arch-layer-split {
+  display:grid; grid-template-columns:1fr 1fr;
+}
+.arch-layer-half {
+  padding:24px 28px;
+}
+.arch-layer-half:first-child { border-right:1px dashed var(--border-d); }
+
+.layer-fe   { background:var(--fe-bg); }
+.layer-be   { background:var(--be-bg); }
+.layer-data { background:var(--data-bg); }
+.layer-ext  { background:var(--ext-bg); }
+
+.layer-fe   .layer-title { color:var(--fe-t); }
+.layer-be   .layer-title { color:var(--be-t); }
+.layer-data .layer-title { color:var(--data-t); }
+.layer-ext  .layer-title { color:var(--ext-t); }
+
+/* ── File cards ── */
+.file-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media(max-width:640px){ .file-grid{ grid-template-columns:1fr; } }
+.col-head {
+  font-size:12px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; padding:6px 0 8px;
+  border-bottom:2px solid; margin-bottom:2px;
+}
+.col-head.be  { color:var(--be-t);   border-color:var(--be); }
+.col-head.fe  { color:var(--fe-t);   border-color:var(--fe); }
+.file-card {
+  background:var(--bg-surface); border-radius:10px; padding:14px 16px;
+  box-shadow:var(--shadow); border-left:4px solid;
+  display:flex; gap:12px; align-items:flex-start;
+  border-top:1px solid var(--border);
+  border-right:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+}
+.file-card.be   { border-left-color:var(--be); }
+.file-card.fe   { border-left-color:var(--fe); }
+.file-card.data { border-left-color:var(--data); }
+.file-card.ext  { border-left-color:var(--ext); }
+.fi { font-size:20px; flex-shrink:0; margin-top:2px; }
+.fn {
+  font-family:'Menlo','Consolas',monospace; font-size:13px;
+  font-weight:700; color:var(--text-1); margin-bottom:3px;
+}
+.fd { font-size:12px; color:var(--text-3); line-height:1.55; }
+
+/* ── Flow ── */
+.flow-step {
+  display:flex; gap:16px; align-items:flex-start;
+  position:relative; margin-bottom:0;
+}
+.flow-step:not(:last-child)::after {
+  content:''; position:absolute;
+  left:19px; top:42px; width:2px;
+  height:calc(100% - 10px); background:var(--border); z-index:0;
+}
+.flow-num {
+  width:40px; height:40px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; font-weight:800; flex-shrink:0;
+  position:relative; z-index:1;
+}
+.flow-body {
+  background:var(--bg-surface); border-radius:10px; padding:16px 20px;
+  margin-bottom:12px; flex:1; box-shadow:var(--shadow);
+  border:1px solid var(--border);
+}
+.flow-tag {
+  display:inline-block; font-size:10px; font-weight:700;
+  padding:2px 8px; border-radius:4px; margin-bottom:6px; letter-spacing:.05em;
+}
+.tag-fe   { background:var(--fe-bg);   color:var(--fe-t); }
+.tag-be   { background:var(--be-bg);   color:var(--be-t); }
+.tag-ext  { background:var(--ext-bg);  color:var(--ext-t); }
+.tag-algo { background:var(--algo-bg); color:var(--algo-t); }
+.flow-title { font-weight:700; font-size:14px; margin-bottom:4px; color:var(--text-1); }
+.flow-desc  { font-size:13px; color:var(--text-3); }
+
+code {
+  font-family:'Menlo','Consolas',monospace; font-size:12px;
+  background:var(--bg-code); color:var(--text-1);
+  padding:1px 5px; border-radius:4px;
+  border:1px solid var(--border);
+}
+
+/* ── Concepts ── */
+.concept-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media(max-width:700px){ .concept-grid{ grid-template-columns:1fr; } }
+.concept-card {
+  background:var(--bg-surface); border-radius:var(--r); padding:24px;
+  box-shadow:var(--shadow); border:1px solid var(--border);
+}
+.concept-emoji { font-size:32px; margin-bottom:12px; }
+.concept-title { font-size:16px; font-weight:800; margin-bottom:3px; color:var(--text-1); }
+.concept-sub {
+  font-size:11px; font-weight:600; color:var(--text-muted);
+  letter-spacing:.08em; text-transform:uppercase; margin-bottom:12px;
+}
+.concept-desc { font-size:13px; color:var(--text-2); line-height:1.65; }
+.concept-note {
+  background:var(--bg-surface2); border-radius:8px; padding:10px 14px; margin-top:12px;
+  font-size:12px; color:var(--text-2); border-left:3px solid var(--border);
+  line-height:1.6;
+}
+
+/* ── JSON boxes ── */
+.json-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:640px){ .json-grid{ grid-template-columns:1fr; } }
+.json-box {
+  background:var(--bg-surface); border-radius:var(--r); padding:20px;
+  box-shadow:var(--shadow); border:1px solid var(--border);
+}
+.json-title { font-size:12px; font-weight:700; margin-bottom:10px; }
+.json-title.data { color:var(--data-t); }
+.json-title.be   { color:var(--be-t); }
+pre {
+  font-family:'Menlo','Consolas',monospace; font-size:12px;
+  background:var(--bg-code); padding:14px; border-radius:8px;
+  overflow-x:auto; color:var(--text-1); line-height:1.65;
+  border:1px solid var(--border);
+}
+.json-note { font-size:11px; color:var(--text-muted); margin-top:8px; }
+
+/* ── N일 계획 박스 ── */
+.day-plan-box {
+  background:var(--bg-surface); border-radius:var(--r); padding:28px;
+  box-shadow:var(--shadow); border:1px solid var(--border);
+}
+.day-plan-step {
+  display:flex; align-items:center; gap:12px;
+}
+.day-plan-num {
+  width:32px; height:32px; border-radius:50%; font-weight:800;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.day-plan-text { font-size:14px; color:var(--text-2); }
+.day-plan-text strong { color:var(--text-1); }
+
+/* ── Footer ── */
+.footer {
+  text-align:center; color:var(--text-muted); font-size:12px;
+  padding-top:28px; border-top:1px solid var(--border);
+}
+</style>
+</head>
+<body>
+
+<!-- 다크모드 토글 -->
+<button id="theme-toggle" title="라이트/다크 모드 전환">🌙</button>
+
+<div class="page">
+
+<!-- ═══ HERO ═══════════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-tag">KBS 라디오 전파조사팀</div>
+  <h1>전파조사 경로 최적화<br>기술 아키텍처</h1>
+  <p class="sub">지도에서 방문지를 선택하면 최단 방문 순서를 계산하고 타임라인으로 보여주는 앱.<br>이 문서는 그 내부가 어떻게 돌아가는지 한눈에 보여줍니다.</p>
+  <div class="hero-stats">
+    <div><div class="stat-num">~1초</div><div class="stat-lbl">20개 지점 최적화</div></div>
+    <div><div class="stat-num">75개</div><div class="stat-lbl">전북 방문 지점</div></div>
+    <div><div class="stat-num">0개</div><div class="stat-lbl">DB 없음 (JSON 파일만)</div></div>
+    <div><div class="stat-num">HTTPS</div><div class="stat-lbl">스마트폰 LAN 접속</div></div>
+  </div>
+</div>
+
+<!-- ═══ 01 전체 구조 ════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">01 — 전체 구조</div>
+  <h2>앱은 3개 층으로 이루어져 있습니다</h2>
+  <p class="lead">사용자 PC에서 Flask를 실행하고, 같은 와이파이의 스마트폰에서 브라우저로 접속합니다. 서버는 최적화 계산만 하고, 지도는 브라우저가 그립니다.</p>
+
+  <div class="arch-wrap">
+
+    <div class="arch-layer layer-fe">
+      <div class="layer-title">🌐 프론트엔드 레이어 — 브라우저 (스마트폰 / PC)</div>
+      <div class="layer-desc">
+        Leaflet 지도 위에 지점 마커를 표시하고, 사용자 조작을 받아 서버에 요청을 보냅니다.
+        결과(최적 순서·타임라인·경로선)도 여기서 화면에 그립니다.
+        <div style="margin-top:10px;">
+          <span class="chip fe">app.js</span>
+          <span class="chip fe">map.js</span>
+          <span class="chip fe">selection.js</span>
+          <span class="chip fe">optimize.js</span>
+          <span class="chip fe">timeline.js</span>
+          <span class="chip fe">multiday.js</span>
+          <span class="chip fe">Leaflet.js</span>
+          <span class="chip fe">Bootstrap 5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">
+      <span>⇄ &nbsp; HTTPS 요청/응답 &nbsp;— 같은 와이파이 LAN</span>
+    </div>
+
+    <div class="arch-layer layer-be">
+      <div class="layer-title">🐍 백엔드 레이어 — Flask 서버 (운영자 PC)</div>
+      <div class="layer-desc">
+        HTTP 요청을 받아 최적화를 실행하고 JSON으로 응답합니다.
+        서버가 켜질 때 자동으로 SSL 인증서를 만들고,
+        백그라운드에서 거리 행렬을 미리 계산해 둡니다.
+        <div style="margin-top:10px;">
+          <span class="chip be">app.py &nbsp; GET /</span>
+          <span class="chip be">POST /api/optimize</span>
+          <span class="chip be">POST /api/optimize-multiday</span>
+          <span class="chip be">GET /api/health</span>
+          <span class="chip be">GET /admin</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow-split">
+      <div class="arch-arrow-half"><span>↓ &nbsp; 내부 호출</span></div>
+      <div class="arch-arrow-half"><span>↓ &nbsp; 내부 호출</span></div>
+    </div>
+
+    <div class="arch-layer-split">
+      <div class="arch-layer-half layer-be">
+        <div class="layer-title">🧮 optimizer.py</div>
+        <div class="layer-desc">
+          거리 행렬을 입력받아 OR-Tools TSP로 최적 방문 순서를 계산합니다.
+          도착지가 있으면 종단 고정, 없으면 Open TSP.
+          N일 배분(<code>assign_days</code>)도 여기 있습니다.
+          <div style="margin-top:8px;">
+            <span class="chip be">OR-Tools</span>
+            <span class="chip be">pywrapcp</span>
+          </div>
+        </div>
+      </div>
+      <div class="arch-layer-half layer-be">
+        <div class="layer-title">📐 distance_matrix.py + prefetch.py</div>
+        <div class="layer-desc">
+          OSRM Table API로 N×N 도로 시간·거리 행렬을 가져옵니다.
+          pairwise 캐시로 반복 계산을 막고, 서버 시작 시
+          prefetch.py가 백그라운드에서 미리 전체 행렬을 계산해둡니다.
+          <div style="margin-top:8px;">
+            <span class="chip be">메모리 캐시</span>
+            <span class="chip be">Haversine 폴백</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow-split">
+      <div class="arch-arrow-half"><span>↓ &nbsp; 파일 읽기</span></div>
+      <div class="arch-arrow-half"><span>↓ &nbsp; HTTP API 호출</span></div>
+    </div>
+
+    <div class="arch-layer-split">
+      <div class="arch-layer-half layer-data">
+        <div class="layer-title">📄 locations.json</div>
+        <div class="layer-desc">
+          지점 데이터 파일. 서버가 켜질 때 메모리에 로드합니다.
+          DB 없이 이 파일 하나로 운영. 다른 지역 팀은 이 파일만 교체하면 됩니다.
+          <div style="margin-top:8px;">
+            <span class="chip data">id · name · lat · lng</span>
+            <span class="chip data">sigungu (색상 키)</span>
+          </div>
+        </div>
+      </div>
+      <div class="arch-layer-half layer-ext">
+        <div class="layer-title">🗺️ OSRM 공개 서버</div>
+        <div class="layer-desc">
+          <code>router.project-osrm.org</code> — OpenStreetMap 기반 무료 API.
+          실제 도로를 따른 이동 시간·거리를 N×N 한 번에 계산해줍니다.
+          접속 실패 시 Haversine × 1.4로 자동 전환됩니다.
+          <div style="margin-top:8px;">
+            <span class="chip ext">Table API</span>
+            <span class="chip ext">Route API (경로선)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ 02 파일 지도 ═════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">02 — 파일 지도</div>
+  <h2>각 파일이 하는 일</h2>
+
+  <div class="file-grid">
+    <div class="col-head be">🐍 Python (백엔드)</div>
+    <div class="col-head fe">⚡ JavaScript (프론트엔드)</div>
+
+    <div class="file-card be">
+      <div class="fi">🚪</div>
+      <div><div class="fn">app.py</div>
+      <div class="fd">서버 시작점. URL 라우팅, SSL 인증서 자동 생성, 관리 페이지 임포트 기능 전부 담당</div></div>
+    </div>
+    <div class="file-card fe">
+      <div class="fi">🎯</div>
+      <div><div class="fn">app.js</div>
+      <div class="fd">JS 전체 진입점. 전역 상태(출발지·도착지·선택목록) 관리, GPS 버튼, 컨텍스트 메뉴 처리</div></div>
+    </div>
+
+    <div class="file-card be">
+      <div class="fi">🧮</div>
+      <div><div class="fn">optimizer.py</div>
+      <div class="fd">OR-Tools로 TSP를 풀어 최적 방문 순서 반환. N일 greedy 배분(<code>assign_days</code>)도 여기</div></div>
+    </div>
+    <div class="file-card fe">
+      <div class="fi">🗺️</div>
+      <div><div class="fn">map.js</div>
+      <div class="fd">Leaflet 초기화, 지점 CircleMarker 렌더, 우클릭/롱프레스 메뉴, 결과 경로선 표시</div></div>
+    </div>
+
+    <div class="file-card be">
+      <div class="fi">📐</div>
+      <div><div class="fn">distance_matrix.py</div>
+      <div class="fd">OSRM Table API로 N×N 거리행렬 계산. pairwise 캐시로 중복 호출 방지</div></div>
+    </div>
+    <div class="file-card fe">
+      <div class="fi">☑️</div>
+      <div><div class="fn">selection.js</div>
+      <div class="fd">사이드바 체크박스 ↔ 지도 마커 양방향 동기화, 시군구 필터, 텍스트 검색</div></div>
+    </div>
+
+    <div class="file-card be">
+      <div class="fi">⚡</div>
+      <div><div class="fn">prefetch.py</div>
+      <div class="fd">서버 켜질 때 백그라운드 스레드로 전체 75×75 행렬을 미리 계산. 첫 최적화가 즉시 응답</div></div>
+    </div>
+    <div class="file-card fe">
+      <div class="fi">🔄</div>
+      <div><div class="fn">optimize.js</div>
+      <div class="fd">POST /api/optimize 호출, 로딩 스피너 표시, 결과 데이터를 map.js·timeline.js에 전달</div></div>
+    </div>
+
+    <div class="file-card data">
+      <div class="fi">📋</div>
+      <div><div class="fn">locations.json</div>
+      <div class="fd">지점 데이터. id·name·lat·lng·sigungu 필드. 지역 팀별 이 파일만 교체해 재사용</div></div>
+    </div>
+    <div class="file-card fe">
+      <div class="fi">⏱️</div>
+      <div><div class="fn">timeline.js</div>
+      <div class="fd">구간별 이동시간·도착시각 타임라인 패널 렌더. 합계(총 km·종료시각) 표시</div></div>
+    </div>
+
+    <div></div>
+    <div class="file-card fe">
+      <div class="fi">📅</div>
+      <div><div class="fn">multiday.js</div>
+      <div class="fd">N일 계획 UI. 그룹 표시 → 날짜별 패널 설정 → 최종 계산 6단계 흐름</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 03 요청 흐름 ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">03 — 요청 흐름</div>
+  <h2>최적화 버튼을 누르면 무슨 일이 일어날까?</h2>
+
+  <div class="flow">
+
+    <div class="flow-step">
+      <div class="flow-num" style="background:var(--fe-bg);color:var(--fe-t);">1</div>
+      <div class="flow-body">
+        <div class="flow-tag tag-fe">브라우저 — selection.js / app.js</div>
+        <div class="flow-title">지점 선택 + 출발지 설정</div>
+        <div class="flow-desc">마커 클릭 또는 사이드바 체크박스로 지점 선택 → <code>state.selected</code>(Set)에 id 저장.
+          GPS 버튼 또는 지도 롱프레스로 출발지 좌표 설정 → <code>state.origin</code>에 저장.
+          선택 2개 이상 + 출발지 있을 때 [최적화] 버튼 활성화.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num" style="background:var(--fe-bg);color:var(--fe-t);">2</div>
+      <div class="flow-body">
+        <div class="flow-tag tag-fe">브라우저 → 서버 — optimize.js</div>
+        <div class="flow-title">POST /api/optimize 전송</div>
+        <div class="flow-desc"><code>fetch('/api/optimize', {method:'POST', body: JSON.stringify({...})})</code>
+          로딩 스피너를 띄우고 서버에 JSON 전송:
+          선택된 지점 id 배열 · 출발지 좌표 · 시작시각(<code>"09:00"</code>) · 체류시간(분)</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num" style="background:var(--be-bg);color:var(--be-t);">3</div>
+      <div class="flow-body">
+        <div class="flow-tag tag-be">서버 — distance_matrix.py</div>
+        <div class="flow-title">거리 행렬 조회 or 계산</div>
+        <div class="flow-desc"><code>get_matrix(coords, keys)</code>가 필요한 좌표 쌍을 먼저 <strong>캐시</strong>에서 확인.
+          캐시 미스 시 OSRM Table API를 한 번에 호출해 N×N 전체 행렬 획득.
+          OSRM 10초 초과 or 실패 → <strong>Haversine × 1.4, 60km/h</strong>로 즉시 대체.
+          응답에 <code>source: "osrm" | "haversine"</code> 포함.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num" style="background:var(--algo-bg);color:var(--algo-t);">4</div>
+      <div class="flow-body">
+        <div class="flow-tag tag-algo">알고리즘 — optimizer.py</div>
+        <div class="flow-title">OR-Tools TSP 풀기</div>
+        <div class="flow-desc"><code>solve(matrix, start_idx, end_idx)</code> — 이동시간 행렬을 입력해 최단 방문 순서(인덱스 배열) 반환.
+          탐색 전략: <code>PATH_CHEAPEST_ARC</code> 초기해 + 시간 제한 1초.
+          20개 이하에서는 최적해 or 그에 가까운 해를 1초 내 반환.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num" style="background:var(--be-bg);color:var(--be-t);">5</div>
+      <div class="flow-body">
+        <div class="flow-tag tag-be">서버 — app.py</div>
+        <div class="flow-title">타임라인 + 경로선 조립</div>
+        <div class="flow-desc">최적 순서대로 각 구간 <code>drive_min</code>, <code>arrive</code>, <code>depart</code> 계산 (<code>_build_legs</code>).
+          OSRM Route API로 <strong>실제 도로 경로 좌표(polyline)</strong> 가져오기 (<code>_build_polyline</code>).
+          Route API 실패 시 직선 좌표 배열로 폴백 — 어떤 경우에도 빈 값은 반환하지 않음.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-num" style="background:var(--fe-bg);color:var(--fe-t);">6</div>
+      <div class="flow-body">
+        <div class="flow-tag tag-fe">브라우저 — map.js / timeline.js</div>
+        <div class="flow-title">결과 렌더링</div>
+        <div class="flow-desc">지도에 ①②③… 번호 DivIcon 마커 표시. 도로를 따라 파란 경로선 그리기.
+          타임라인 패널에 구간별 도착·출발 시각, 합계(총 km·종료시각) 표시.
+          <code>source === "haversine"</code>이면 "거리 근사치" 경고 배너 노출.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ 04 핵심 기술 ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">04 — 핵심 기술</div>
+  <h2>알아두면 좋은 개념 3가지</h2>
+
+  <div class="concept-grid">
+
+    <div class="concept-card">
+      <div class="concept-emoji">🔢</div>
+      <div class="concept-title">TSP (외판원 문제)</div>
+      <div class="concept-sub">OR-Tools · Google</div>
+      <div class="concept-desc">N개 지점을 <strong>가장 짧은 경로로 한 번씩 모두 방문</strong>하는 순서를 찾는 문제.
+        지점이 10개만 돼도 가능한 순서가 수백만 가지인데,
+        OR-Tools가 수학적 탐색으로 1초 내에 최선에 가까운 답을 계산합니다.</div>
+      <div class="concept-note">
+        도착지 없음 → 마지막 지점에서 끝 (Open TSP)<br>
+        도착지 있음 → 반드시 그 지점에서 끝 (종단 고정)<br>
+        이 분기 처리를 위해 가상 depot 노드 트릭 사용
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-emoji">🛣️</div>
+      <div class="concept-title">거리 행렬 &amp; 캐시</div>
+      <div class="concept-sub">OSRM · Haversine 폴백</div>
+      <div class="concept-desc">"직선 거리"가 아닌 <strong>실제 도로를 따른 이동 시간</strong>이 필요합니다.
+        OSRM에 N개 좌표를 보내면 N×N 행렬을 한 번에 돌려줍니다.
+        이 결과를 메모리에 캐시해두어, 이후 요청은 API 없이 즉시 응답합니다.</div>
+      <div class="concept-note">
+        서버 시작 시 prefetch.py가 미리 75×75 = 5,625쌍을 계산<br>
+        OSRM 실패 → Haversine × 1.4 (직선거리 × 도로 우회율)<br>
+        실패 여부는 배너로 사용자에게 표시
+      </div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-emoji">🔐</div>
+      <div class="concept-title">자동 HTTPS &amp; GPS</div>
+      <div class="concept-sub">cryptography 라이브러리</div>
+      <div class="concept-desc">스마트폰 GPS(<code>navigator.geolocation</code>)는 <strong>HTTPS에서만 동작</strong>합니다.
+        앱이 시작될 때 현재 PC의 LAN IP를 확인하고,
+        그 IP를 SAN에 포함한 자체 서명 인증서를 자동으로 생성합니다.</div>
+      <div class="concept-note">
+        cert.pem + key.pem 없으면 자동 생성<br>
+        IP가 바뀌면 인증서도 자동 재생성<br>
+        아이폰은 /cert 에서 인증서 설치 후 신뢰 설정 필요 (최초 1회)
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ 05 데이터 구조 ════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">05 — 데이터 구조</div>
+  <h2>핵심 데이터가 어떻게 생겼나</h2>
+
+  <div class="json-grid">
+    <div class="json-box">
+      <div class="json-title data">📄 locations.json — 지점 하나</div>
+<pre>{
+  "id":      "1",
+  "seq":     1026,
+  "name":    "동촌경로당",
+  "address": "전북 고창군 고창읍...",
+  "sigungu": "고창군",
+  "lat":     35.390246,
+  "lng":     126.492559
+}</pre>
+      <div class="json-note">sigungu 값으로 지도 마커 색상 자동 배정. 다른 지역 팀은 이 파일만 교체.</div>
+    </div>
+
+    <div class="json-box">
+      <div class="json-title be">📡 POST /api/optimize 응답</div>
+<pre>{
+  "order":   ["5","1","2","8"],
+  "legs": [
+    { "id": "5",
+      "drive_min": 35, "drive_km": 28,
+      "arrive": "09:35", "depart": "09:55" }
+  ],
+  "summary": {
+    "end_time": "16:50",
+    "total_drive_min": 165,
+    "total_km": 142
+  },
+  "polyline": [[35.39,126.49], ...],
+  "source":  "osrm"
+}</pre>
+      <div class="json-note">source가 "haversine"이면 프론트에서 근사치 경고 배너 표시.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 06 N일 계획 ════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">06 — 확장 기능</div>
+  <h2>N일 계획은 어떻게 다를까?</h2>
+  <p class="lead">75개 지점 전체를 며칠에 걸쳐 나눠 방문할 때 사용합니다. 단순히 최적화를 N번 하는 게 아니라, 먼저 날별로 지점을 배분한 뒤 각 날을 최적화합니다.</p>
+
+  <div class="day-plan-box">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div class="day-plan-step">
+        <div class="day-plan-num" style="background:var(--fe-bg);color:var(--fe-t);">1</div>
+        <div class="day-plan-text"><strong>그룹 표시</strong> — 미방문 지점 전체를 지도에 표시, 배분할 지점 선택</div>
+      </div>
+      <div class="day-plan-step">
+        <div class="day-plan-num" style="background:var(--fe-bg);color:var(--fe-t);">2</div>
+        <div class="day-plan-text"><strong>일수 추정</strong> — <code>/api/estimate-days</code> 호출로 몇 일 필요한지 빠르게 계산</div>
+      </div>
+      <div class="day-plan-step">
+        <div class="day-plan-num" style="background:var(--fe-bg);color:var(--fe-t);">3</div>
+        <div class="day-plan-text"><strong>날짜별 패널 설정</strong> — 각 날의 출발지·도착지 설정</div>
+      </div>
+      <div class="day-plan-step">
+        <div class="day-plan-num" style="background:var(--algo-bg);color:var(--algo-t);">4</div>
+        <div class="day-plan-text"><strong>greedy 배분</strong> — <code>assign_days()</code>가 하루 업무 시간 내에 들어오도록 지점을 날별로 배정</div>
+      </div>
+      <div class="day-plan-step">
+        <div class="day-plan-num" style="background:var(--algo-bg);color:var(--algo-t);">5</div>
+        <div class="day-plan-text"><strong>날별 TSP</strong> — 각 날 배정된 지점에 대해 개별 최적화 실행</div>
+      </div>
+      <div class="day-plan-step">
+        <div class="day-plan-num" style="background:var(--be-bg);color:var(--be-t);">6</div>
+        <div class="day-plan-text"><strong>결과 표시</strong> — 날별 탭으로 타임라인·경로선·요약 표시. 마지막 날 초과 시 경고</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  전파조사 경로 최적화 &nbsp;·&nbsp; 기술 아키텍처 문서 &nbsp;·&nbsp; 2026-04-17
+</div>
+
+</div><!-- /page -->
+
+<script>
+(function () {
+  const html = document.documentElement;
+  const btn  = document.getElementById('theme-toggle');
+
+  // 저장된 설정 or OS 기본값
+  function getPreferred() {
+    const saved = localStorage.getItem('arch-theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function apply(theme) {
+    html.setAttribute('data-theme', theme);
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    btn.title = theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환';
+  }
+
+  // 초기 적용
+  apply(getPreferred());
+
+  // 토글
+  btn.addEventListener('click', () => {
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('arch-theme', next);
+    apply(next);
+  });
+
+  // OS 설정 변경 감지 (저장 설정 없을 때만)
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (!localStorage.getItem('arch-theme')) apply(e.matches ? 'dark' : 'light');
+  });
+})();
+</script>
+
+</body>
+</html>

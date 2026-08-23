@@ -4,21 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 현재 상태
 
-**구현 완료** (Step 0~4 완료, 2026-04-17 기준). 실 기기 E2E 테스트(스마트폰 LAN, T맵/카카오 딥링크, 인쇄) 일부 미검증.
+**구현 완료** (Step 0~4, 2026-04-17) + **사내 장소 공유 기능 추가** (2026-08-24: 매직링크 로그인, SQLite DB, 3단계 공유 권한, 카카오 지오코딩). 실 기기 E2E 테스트(스마트폰 LAN) 일부 미검증. 지점 삭제 UI는 아직 없음.
 
 ## 프로젝트 개요
 
-KBS 라디오 전파 측정을 위한 **차량 방문 경로 최적화 단일 페이지 웹앱**. 지도에서 오늘 방문할 지점을 선택 → OR-Tools로 방문 순서 최적화 → T맵/카카오내비로 경로 전송.
+**차량 방문 경로 최적화 웹앱.** KBS 라디오 전파 측정용으로 시작했으나 목적 종료 후 사내 개인/출장 경로 계획 도구로 전환됨. 지도에서 방문할 지점을 선택 → OR-Tools로 방문 순서 최적화 → 타임라인 확인.
 
-- 사용 환경: 운영자 본인 PC에서 Flask 실행, 같은 와이파이의 스마트폰에서 접속
-- 배포 단위는 "코드 + `locations.json`" — 다른 지역 팀은 `locations.json`만 교체해서 같은 코드를 돌린다. 따라서 **지역/지점 하드코딩 금지**.
+- 사용 환경: 사내 이메일 매직링크 로그인 기반 다중 사용자(회사 전체 대상). 서버는 Flask 단일 프로세스.
+- 장소 데이터는 SQLite DB(`app.db`)에 저장. 사용자가 웹에서 직접 추가하며 기본 비공개 → 이메일 지정 공유 → 전체공개 3단계 권한. **지역/지점 하드코딩 금지**.
 
 ## 실행 / 개발 명령
 
 ```bash
 pip install -r requirements.txt
-python app.py          # https://localhost:5000 (cert.pem/key.pem 있으면 HTTPS 자동 활성화)
+SECRET_KEY=<random> python app.py   # https://localhost:5000 (cert.pem/key.pem 있으면 HTTPS 자동 활성화)
 ```
+
+`SECRET_KEY` 환경변수가 없으면 서버가 시작하지 않는다(세션 위조 방지). 로컬 테스트만 할 땐 `ALLOW_INSECURE_DEV_KEY=1`로 우회 가능 — 운영 배포 시 금지. `KAKAO_REST_API_KEY` 없으면 주소검색만 비활성화되고 GPS·지도클릭 장소 추가는 정상 동작.
 
 LAN 스마트폰 접속을 전제로 하므로 Flask는 `host="0.0.0.0"`으로 바인딩해야 한다. `cert.pem`/`key.pem`(자체 서명 인증서)이 route-optimizer/ 폴더에 있으면 HTTPS로 실행된다(`https://192.168.x.x:5000`). GPS 기능은 HTTPS 필수.
 
@@ -28,36 +30,42 @@ LAN 스마트폰 접속을 전제로 하므로 Flask는 `host="0.0.0.0"`으로 �
 
 ```
 route-optimizer/
-├── app.py               # Flask. GET / + POST /api/optimize + POST /api/optimize-multiday + GET /api/health
+├── app.py               # Flask. 인증/지점/최적화 라우트 전체
+├── db.py                # SQLite 연결 + 스키마(users, locations, location_shares, auth_tokens)
+├── auth.py              # 매직링크 토큰 발급/검증, login_required 데코레이터
+├── locations_repo.py    # 지점 CRUD + 가시성(visibility) 규칙
+├── geocode.py           # 카카오 로컬 API 프록시 (주소/키워드 검색)
 ├── optimizer.py         # OR-Tools TSP (Open / 종단 고정) + N일 배분 assign_days()
 ├── distance_matrix.py   # OSRM Table API + pairwise 메모리 캐시 + Haversine×1.4 폴백
-├── prefetch.py          # 서버 기동 시 백그라운드 스레드로 전체 행렬 미리 계산
-├── locations.json       # 지점 데이터 (지역별 교체 대상)
-├── data_source.json     # 데이터 소스 메타데이터
 ├── requirements.txt
+├── tests/               # pytest — db/auth/locations_repo/geocode/routes
 ├── tools/
-│   └── xlsx_to_locations.py  # Excel/Google Sheets → locations.json 변환 CLI
+│   └── xlsx_to_locations.py  # Excel/Google Sheets → 관리 페이지 일괄 임포트 CLI
 ├── templates/
+│   ├── login.html       # 매직링크 로그인 페이지
 │   ├── index.html       # 단일 페이지 (Bootstrap 5 CDN)
-│   └── admin.html       # 관리 페이지 (데이터 임포트)
+│   └── admin.html       # 관리 페이지 (엑셀 일괄 임포트 — 재설계 예정, 현재 일부 라우트 410)
 └── static/
-    ├── css/style.css    # + @media print 스타일
     └── js/
-        ├── app.js       # 엔트리 + 전역 상태
-        ├── map.js       # Leaflet 초기화, 마커, 우클릭/롱프레스 메뉴
-        ├── selection.js # 지점 목록 ↔ 지도 양방향 동기화, 필터/검색
-        ├── optimize.js  # /api/optimize 호출 + 결과 렌더
-        ├── timeline.js  # 타임라인 패널 + 번호 DivIcon
-        ├── multiday.js  # N일 경로 계획 UI
-        └── admin.js     # 관리 페이지 로직
+        ├── app.js           # 엔트리 + 전역 상태 + 비동기 초기화
+        ├── auth.js          # 세션 확인 + 지점 fetch + 로그아웃
+        ├── map.js           # Leaflet 초기화, 마커, 우클릭/롱프레스 메뉴
+        ├── selection.js     # 지점 목록 ↔ 지도 양방향 동기화, 필터/검색
+        ├── locations_ui.js  # 장소 추가 모달 (검색/GPS/지도클릭)
+        ├── sharing_ui.js    # 공유 대상 관리 + 전체공개 토글
+        ├── optimize.js      # /api/optimize 호출 + 결과 렌더
+        ├── timeline.js      # 타임라인 패널 + 번호 DivIcon
+        ├── multiday.js      # N일 경로 계획 UI
+        └── admin.js         # 관리 페이지 로직
 ```
 
-### 상태 저장 모델 — **DB 없음**
-서버는 프로세스 메모리에만 상태를 둔다:
-- `LOCATIONS`: 기동 시 `locations.json` 로드
-- `DISTANCE_MATRIX_CACHE`: 최초 최적화 요청 때 전체 N×N(예: 75×75) OSRM Table을 1회 계산해 캐시. 이후 재사용. 프로세스 재시작 시 재계산(수 초).
+### 상태 저장 모델 — **SQLite (`app.db`)**
+정적 `locations.json`은 폐기됨(2026-08-24). 서버 상태:
+- `db.py`의 SQLite DB(`route-optimizer/app.db`, gitignore 대상) — `users`/`locations`/`location_shares`/`auth_tokens` 테이블.
+- 지점 가시성: 소유자 본인 OR `is_public=1` OR 내 이메일이 `location_shares`에 있음 (`locations_repo.list_visible_locations`).
+- `DISTANCE_MATRIX_CACHE`: 최적화 요청 때 필요한 지점들의 OSRM Table을 계산해 프로세스 메모리에 캐시(정적 지점 목록 프리페치는 더 이상 없음 — `prefetch.py` 삭제됨).
 
-방문 상태/메모/이력은 저장하지 않는다. 로그인/프로젝트/시트연동/지오코딩/지점 CRUD UI도 **명시적으로 범위 밖**이다 (PRD "명시적으로 하지 않는 것" 참조). 기능 추가 제안 전 이 목록을 확인할 것.
+방문 상태/메모/이력은 여전히 저장하지 않는다. 지점 **삭제** UI는 아직 없음(추가/공유만 가능). 기능 추가 전 PRD 하단 "구현 변경사항"·"추가 확장 기능" 섹션을 먼저 확인.
 
 ### 최적화 흐름
 1. 프론트가 `POST /api/optimize`에 `location_ids[]`, `start{lat,lng,label}`, `end`(nullable), `start_time`, `stay_minutes` 전송.
@@ -74,7 +82,6 @@ route-optimizer/
 - 지도: Leaflet + OSM 타일. 지점은 CircleMarker, **시군구별 색상은 `sigungu` 필드 값으로 팔레트에서 자동 배정**.
 - 마커 ↔ 사이드바 체크박스는 양방향 동기화.
 - 결과 마커는 번호 DivIcon(①②③…).
-- 내비 딥링크: T맵(`tmap://route?...&viaX0=…`) 경유지 무제한, 카카오내비 경유지 3개 초과 시 버튼 비활성 + 툴팁. 데스크톱은 웹 길찾기 URL 폴백.
 
 ## 문서 관리
 
@@ -90,6 +97,6 @@ route-optimizer/
 
 ## 코딩 지침
 
-- `locations.json` 스키마: `{id, seq, name, address, sigungu, lat, lng}`. 필드명을 임의로 바꾸지 말 것(다른 지역 팀 파일과 호환 유지). `sigungu`는 시군구 색상 키로 사용.
+- `locations` 테이블 스키마: `{id, owner_user_id, name, address, lat, lng, source, sigungu, is_public, created_at}`. `sigungu`는 시군구 색상 키(값 없으면 "기타"로 묶임). `source`는 `geocode`/`gps`/`map_click` 중 하나.
 - OR-Tools 해는 20개 이하에서 1초 내 최적해가 목표. 탐색 전략을 바꿀 때는 이 성능 목표를 깨지 말 것.
 - 오차 허용: OSRM 기반 총 시간은 실제 대비 10~30% 오차 허용(검증 기준 5번). 방문 **순서**가 맞는 것이 우선.

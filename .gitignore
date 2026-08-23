@@ -16,3 +16,5 @@ route-optimizer/app.db
 route-optimizer/*.db
 route-optimizer/*.db-journal
 route-optimizer/*.db-wal
+.claude/settings.local.json
+~$*
