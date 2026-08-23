@@ -1,6 +1,6 @@
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -51,7 +51,7 @@ def test_verify_token_rejects_unknown_token(db):
 
 def test_verify_token_rejects_expired(db):
     token = create_token(db, "user@company.com")
-    expired = (datetime.utcnow() - timedelta(minutes=1)).isoformat()
+    expired = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
     db.execute("UPDATE auth_tokens SET expires_at = ? WHERE token = ?", (expired, token))
     db.commit()
     assert verify_token(db, token) is None

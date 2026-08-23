@@ -4,7 +4,7 @@ auth.py — 매직링크 토큰 발급/검증 + 세션 헬퍼.
 """
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import session, redirect, url_for, request, jsonify
@@ -21,7 +21,7 @@ def is_allowed_email(email: str) -> bool:
 
 def create_token(db, email: str) -> str:
     token = secrets.token_urlsafe(32)
-    expires_at = (datetime.utcnow() + timedelta(minutes=TOKEN_TTL_MINUTES)).isoformat()
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=TOKEN_TTL_MINUTES)).isoformat()
     db.execute(
         "INSERT INTO auth_tokens (token, email, expires_at, used) VALUES (?, ?, ?, 0)",
         (token, email, expires_at),
@@ -36,7 +36,7 @@ def verify_token(db, token: str):
     ).fetchone()
     if not row or row["used"]:
         return None
-    if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+    if datetime.fromisoformat(row["expires_at"]) < datetime.now(timezone.utc):
         return None
     db.execute("UPDATE auth_tokens SET used = 1 WHERE token = ?", (token,))
     db.commit()
