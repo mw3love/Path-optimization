@@ -761,9 +761,13 @@ def api_locations_create():
         return jsonify({"error": "name, lat, lng는 필수입니다"}), 400
     if source not in ("geocode", "gps", "map_click"):
         return jsonify({"error": f"알 수 없는 source: {source}"}), 400
+    try:
+        lat, lng = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return jsonify({"error": "lat, lng는 숫자여야 합니다"}), 400
 
     loc_id = locrepo.create_location(
-        g.db, session["user_id"], name, body.get("address", ""), float(lat), float(lng), source
+        g.db, session["user_id"], name, body.get("address", ""), lat, lng, source
     )
     return jsonify({"id": loc_id}), 201
 
