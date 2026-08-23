@@ -1,18 +1,16 @@
 """
 app.py — Flask 엔트리포인트
-  GET  /          → index.html (LOCATIONS를 window.LOCATIONS로 인라인)
+  GET  /          → index.html (로그인 필요)
   POST /api/optimize → 최적화
   GET  /api/health  → OSRM 연결 상태·캐시 상태
 """
 import csv
 import io
-import json
 import math
 import os
 import re
 import socket
 import ipaddress
-import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -159,52 +157,21 @@ def no_cache_static(response):
         response.headers["Pragma"] = "no-cache"
     return response
 
-# ── 지점 데이터 로드 ────────────────────────────────────────────────────────────
+# ── 경로 상수 ────────────────────────────────────────────────────────────────────
 _BASE = Path(__file__).parent
-_LOCATIONS_PATH = _BASE / "locations.json"
-_DATA_SOURCE_PATH = _BASE / "data_source.json"
-
-with open(_LOCATIONS_PATH, encoding="utf-8") as f:
-    LOCATIONS: list = json.load(f)
-
-_locations_lock = threading.Lock()
-
-# gunicorn 등 __main__ 블록이 실행되지 않는 환경에서 첫 요청 시 prefetch 시작
-_prefetch_started = False
-_prefetch_start_lock = threading.Lock()
-
-@app.before_request
-def _start_prefetch_once():
-    global _prefetch_started
-    if not _prefetch_started:
-        with _prefetch_start_lock:
-            if not _prefetch_started:
-                from prefetch import start_prefetch
-                start_prefetch(LOCATIONS)
-                _prefetch_started = True
-
-
-def _reload_locations(new_list: list):
-    """LOCATIONS 전역 변수를 thread-safe하게 교체 (서버 재시작 불필요)."""
-    global LOCATIONS
-    with _locations_lock:
-        LOCATIONS = new_list
 
 # ── 라우트 ──────────────────────────────────────────────────────────────────────
 
 @app.route("/")
+@auth.login_required
 def index():
     template_path = _BASE / "templates" / "index.html"
     template_src = template_path.read_text(encoding="utf-8")
-    locations_json = json.dumps(LOCATIONS, ensure_ascii=False)
-    # Jinja2 delimiters를 피하기 위해 render_template_string 에 변수로 주입
-    return render_template_string(
-        template_src,
-        locations_json=locations_json,
-    )
+    return render_template_string(template_src)
 
 
 @app.route("/api/optimize", methods=["POST"])
+@auth.login_required
 def optimize():
     body = request.get_json(force=True)
     if not body:
@@ -223,7 +190,8 @@ def optimize():
 
     # ── 좌표 목록 구성 ──────────────────────────────────────────────────────
     # 인덱스: 0=출발지, 1..n=선택 지점, n+1=도착지(있을 때)
-    loc_map = {loc["id"]: loc for loc in LOCATIONS}
+    from flask import g
+    loc_map = _visible_loc_map(g.db, session["user_id"], session["user_email"])
 
     coords = [(start["lat"], start["lng"])]
     keys = ["__start__"]
@@ -362,7 +330,14 @@ def _build_polyline(keys, ordered_ids, coords, start, end):
     return [[lat, lng] for lat, lng in route_coords]
 
 
+def _visible_loc_map(db, user_id, user_email) -> dict:
+    """현재 사용자가 볼 수 있는 지점만 {str(id): dict} 형태로 반환."""
+    rows = locrepo.list_visible_locations(db, user_id, user_email)
+    return {str(r["id"]): r for r in rows}
+
+
 @app.route("/api/optimize-multiday", methods=["POST"])
+@auth.login_required
 def optimize_multiday():
     """
     N일 경로 계획 엔드포인트.
@@ -416,7 +391,8 @@ def optimize_multiday():
         work_minutes = 540  # 09:00~18:00 = 540분
 
     # ── 좌표/키 목록 구성 ──────────────────────────────────────────────────
-    loc_map = {loc["id"]: loc for loc in LOCATIONS}
+    from flask import g
+    loc_map = _visible_loc_map(g.db, session["user_id"], session["user_email"])
 
     # 검증: 모든 지점 id 존재 여부
     for lid in location_ids:
@@ -554,6 +530,7 @@ def optimize_multiday():
 
 
 @app.route("/api/estimate-days", methods=["POST"])
+@auth.login_required
 def estimate_days():
     """
     빠른 N일 추정 엔드포인트.
@@ -601,7 +578,8 @@ def estimate_days():
     except ValueError:
         work_minutes = 540
 
-    loc_map = {loc["id"]: loc for loc in LOCATIONS}
+    from flask import g
+    loc_map = _visible_loc_map(g.db, session["user_id"], session["user_email"])
     for lid in location_ids:
         if lid not in loc_map:
             return jsonify({"error": f"알 수 없는 지점 id: {lid}"}), 400
@@ -682,7 +660,6 @@ def health():
     return jsonify({
         "osrm": osrm_status,
         "matrix_cache": matrix_info,
-        "locations_count": len(LOCATIONS),
     })
 
 
@@ -979,13 +956,7 @@ def admin():
 
 @app.route("/api/admin/status")
 def admin_status():
-    ds = None
-    if _DATA_SOURCE_PATH.exists():
-        try:
-            ds = json.loads(_DATA_SOURCE_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return jsonify({"location_count": len(LOCATIONS), "data_source": ds})
+    return jsonify({"error": "관리 페이지는 새 지점 구조에 맞춰 재설계 중입니다"}), 410
 
 
 def _parse_source_from_request():
@@ -1034,72 +1005,16 @@ def admin_preview():
 
 @app.route("/api/admin/import", methods=["POST"])
 def admin_import():
-    """데이터 가져오기: locations.json 저장 + 메모리 즉시 반영 + data_source.json 저장."""
-    try:
-        rows, ds_info = _parse_source_from_request()
-
-        if request.content_type and "multipart" in request.content_type:
-            col_map_str = request.form.get("column_map", "{}")
-            try:
-                user_field_map = json.loads(col_map_str)
-            except json.JSONDecodeError:
-                return jsonify({"error": "column_map JSON 파싱 오류"}), 400
-        else:
-            body = request.get_json(force=True) or {}
-            user_field_map = body.get("column_map", {})
-
-        required_fields = ["id", "name", "lat", "lng"]
-        missing = [k for k in required_fields if not user_field_map.get(k)]
-        if missing:
-            return jsonify({"error": f"필수 매핑 누락: {missing}"}), 400
-
-        header_idx = _find_header_row_generic(rows)
-        col_positions = _build_col_map(rows[header_idx])
-        data_rows = rows[header_idx + 1:]
-
-        locations, skipped = _parse_rows_dynamic(data_rows, col_positions, user_field_map)
-
-        if not locations:
-            return jsonify({"error": "가져온 지점이 0개입니다. 컬럼 매핑을 확인하세요"}), 400
-
-        # locations.json 저장
-        _LOCATIONS_PATH.write_text(
-            json.dumps(locations, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        # 메모리 즉시 반영
-        _reload_locations(locations)
-
-        # data_source.json 저장 (locations.json 성공 후)
-        ds_info["column_map"] = user_field_map
-        _DATA_SOURCE_PATH.write_text(
-            json.dumps(ds_info, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
-        return jsonify({
-            "imported": len(locations),
-            "skipped": skipped,
-            "location_count": len(LOCATIONS),
-        })
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"처리 오류: {e}"}), 500
+    return jsonify({"error": "관리 페이지는 새 지점 구조에 맞춰 재설계 중입니다"}), 410
 
 
 # ── 기동 ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from prefetch import start_prefetch
-
     # reloader 부모 프로세스에서만 인증서 생성 (자식에서 중복 실행 방지)
     lan_ip = _get_lan_ip()
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         lan_ip = ensure_ssl_cert(_BASE)
-
-    # reloader는 부모(파일 감시)·자식(실제 앱) 2개 프로세스를 띄운다.
-    # WERKZEUG_RUN_MAIN=true 는 자식에서만 설정되므로, prefetch는 자식에서만 실행.
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        start_prefetch(LOCATIONS)
 
     ssl_context = None
     if (_BASE / "cert.pem").exists() and (_BASE / "key.pem").exists():
