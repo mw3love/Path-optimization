@@ -128,9 +128,18 @@ def ensure_ssl_cert(base_dir: Path) -> str:
 
 app = Flask(__name__)
 
-app.secret_key = os.environ.get("SECRET_KEY", "dev-insecure-key-change-me")
-if app.secret_key == "dev-insecure-key-change-me":
-    print("[WARN] SECRET_KEY 환경변수가 설정되지 않아 개발용 기본값을 사용합니다. 운영 배포 전 반드시 설정하세요.")
+_secret = os.environ.get("SECRET_KEY")
+if not _secret:
+    if os.environ.get("ALLOW_INSECURE_DEV_KEY") == "1":
+        _secret = "dev-insecure-key-change-me"
+        print("[WARN] 개발용 기본 SECRET_KEY 사용 중 — 운영 배포 금지")
+    else:
+        raise RuntimeError("SECRET_KEY 환경변수가 필요합니다 (로컬 개발은 ALLOW_INSECURE_DEV_KEY=1)")
+app.secret_key = _secret
+
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "1") == "1"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
 init_db()
 
@@ -682,7 +691,10 @@ def auth_request_link():
     # (스펙의 에러 처리 항목 — 발급 여부로 사내 이메일 존재 여부를 노출하지 않기 위함).
     if auth.is_allowed_email(email):
         token = auth.create_token(g.db, email)
-        link = f"{request.url_root.rstrip('/')}/auth/verify?token={token}"
+        # Host 헤더는 클라이언트가 조작 가능하므로(피싱 벡터), 신뢰 가능한
+        # BASE_URL이 설정돼 있으면 그것을 우선 사용한다.
+        base_url = (os.environ.get("BASE_URL") or request.url_root).rstrip("/")
+        link = f"{base_url}/auth/verify?token={token}"
         auth.send_magic_link(email, link)
 
     return jsonify({"ok": True})
@@ -697,6 +709,7 @@ def auth_verify():
         return "링크가 만료되었거나 이미 사용되었습니다. 다시 로그인해주세요.", 400
 
     user_id = auth.get_or_create_user(g.db, email)
+    session.clear()  # 이전 계정 세션이 남아 있어도 새 로그인 전 확실히 초기화
     session["user_email"] = email
     session["user_id"] = user_id
     return redirect(url_for("index"))
@@ -718,12 +731,34 @@ def api_session():
 
 # ── 지점 라우트 ──────────────────────────────────────────────────────────────────
 
+def _serialize_location(row, db, user_id):
+    """프론트가 실제로 쓰는 필드만 응답에 포함한다.
+
+    owner_user_id/created_at은 노출하지 않는다(다른 사용자의 내부 id 유출 방지).
+    shares는 본인 소유 지점에 한해서만 채운다(비소유자에게 공유 목록을 노출하지 않기 위함).
+    """
+    is_owner = row["owner_user_id"] == user_id
+    out = {
+        "id": row["id"],
+        "name": row["name"],
+        "address": row["address"],
+        "lat": row["lat"],
+        "lng": row["lng"],
+        "source": row["source"],
+        "sigungu": row["sigungu"],
+        "is_public": bool(row["is_public"]),
+        "shares": locrepo.list_shares(db, row["id"]) if is_owner else [],
+    }
+    return out
+
+
 @app.route("/api/locations", methods=["GET"])
 @auth.login_required
 def api_locations_list():
     from flask import g
     rows = locrepo.list_visible_locations(g.db, session["user_id"], session["user_email"])
-    return jsonify({"locations": rows})
+    locations = [_serialize_location(r, g.db, session["user_id"]) for r in rows]
+    return jsonify({"locations": locations})
 
 
 @app.route("/api/locations", methods=["POST"])
@@ -743,8 +778,10 @@ def api_locations_create():
     except (TypeError, ValueError):
         return jsonify({"error": "lat, lng는 숫자여야 합니다"}), 400
 
+    sigungu = (body.get("sigungu") or "").strip()
+
     loc_id = locrepo.create_location(
-        g.db, session["user_id"], name, body.get("address", ""), lat, lng, source
+        g.db, session["user_id"], name, body.get("address", ""), lat, lng, source, sigungu
     )
     return jsonify({"id": loc_id}), 201
 
@@ -950,6 +987,7 @@ def _parse_rows_dynamic(rows: list, col_positions: dict, user_field_map: dict) -
 # ── 관리 페이지 라우트 ──────────────────────────────────────────────────────────
 
 @app.route("/admin")
+@auth.login_required
 def admin():
     return render_template("admin.html")
 
@@ -979,6 +1017,7 @@ def _parse_source_from_request():
 
 
 @app.route("/api/admin/preview", methods=["POST"])
+@auth.login_required
 def admin_preview():
     """URL 또는 파일에서 헤더(컬럼 목록)를 추출해 반환."""
     try:

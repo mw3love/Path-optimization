@@ -4,11 +4,11 @@ locations_repo.py — 지점 CRUD + 가시성(visibility) 규칙.
 """
 
 
-def create_location(db, owner_user_id, name, address, lat, lng, source) -> int:
+def create_location(db, owner_user_id, name, address, lat, lng, source, sigungu="") -> int:
     cur = db.execute(
-        "INSERT INTO locations (owner_user_id, name, address, lat, lng, source) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (owner_user_id, name, address, lat, lng, source),
+        "INSERT INTO locations (owner_user_id, name, address, lat, lng, source, sigungu) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (owner_user_id, name, address, lat, lng, source, sigungu or ""),
     )
     db.commit()
     return cur.lastrowid

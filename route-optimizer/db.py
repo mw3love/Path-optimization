@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS locations (
     lat REAL NOT NULL,
     lng REAL NOT NULL,
     source TEXT NOT NULL,
+    sigungu TEXT NOT NULL DEFAULT '',
     is_public INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

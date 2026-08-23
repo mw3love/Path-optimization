@@ -60,7 +60,7 @@ def get_or_create_user(db, email: str) -> int:
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if "user_email" not in session:
+        if "user_email" not in session or "user_id" not in session:
             if request.path.startswith("/api/"):
                 return jsonify({"error": "로그인이 필요합니다"}), 401
             return redirect(url_for("login_page"))

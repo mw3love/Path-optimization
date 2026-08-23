@@ -12,3 +12,7 @@ Thumbs.db
 .DS_Store
 *.pem
 .worktrees/
+route-optimizer/app.db
+route-optimizer/*.db
+route-optimizer/*.db-journal
+route-optimizer/*.db-wal
