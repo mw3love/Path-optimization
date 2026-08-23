@@ -5,6 +5,7 @@ import { addLocationMarker } from "./map.js";
 
 let _pendingLatLng = null;
 let _debounceTimer = null;
+let _searchRequestId = 0;
 
 function _el(id) {
   return document.getElementById(id);
@@ -64,7 +65,9 @@ export function initLocationsUi(getLocations, onLocationAdded) {
       return;
     }
     _debounceTimer = setTimeout(async () => {
+      const requestId = ++_searchRequestId;
       const { results, error } = await _searchAddress(q);
+      if (requestId !== _searchRequestId) return;
       if (error) {
         _el("add-loc-search-results").innerHTML = `<div class="text-muted small p-1">${error}</div>`;
         return;
