@@ -61,10 +61,18 @@ export function enableBoxSelect(active) {
 export function initMap(containerId, locations, onContextMenu) {
   _onContextMenu = onContextMenu;
 
-  const avgLat = locations.reduce((s, l) => s + l.lat, 0) / locations.length;
-  const avgLng = locations.reduce((s, l) => s + l.lng, 0) / locations.length;
+  // 지점이 하나도 없으면(신규 사용자 등) 평균 좌표가 NaN이 되어 지도가
+  // 깨지므로, 이 경우 대한민국 중심 좌표로 기본 표시한다.
+  let center = [36.5, 127.8];
+  let zoom = 7;
+  if (locations.length > 0) {
+    const avgLat = locations.reduce((s, l) => s + l.lat, 0) / locations.length;
+    const avgLng = locations.reduce((s, l) => s + l.lng, 0) / locations.length;
+    center = [avgLat, avgLng];
+    zoom = 10;
+  }
 
-  const map = L.map(containerId, { zoomControl: true }).setView([avgLat, avgLng], 10);
+  const map = L.map(containerId, { zoomControl: true }).setView(center, zoom);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
