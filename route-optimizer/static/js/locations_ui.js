@@ -1,14 +1,31 @@
 /**
- * locations_ui.js — 장소 추가 모달: 검색/GPS/지도클릭 3경로 → POST /api/locations
+ * locations_ui.js — 사이드바 검색창(주소 검색 · 위경도 붙여넣기)과 지도 우클릭으로
+ * 장소를 즉시 추가한다(확인 모달 없음 — 연속 추가에 최적화).
  */
 import { addLocationMarker } from "./map.js";
 
-let _pendingLatLng = null;
 let _debounceTimer = null;
 let _searchRequestId = 0;
+let _getLocations = null;
+let _onLocationAdded = null;
 
 function _el(id) {
   return document.getElementById(id);
+}
+
+// "37.5665, 126.9780" / "37.5665 126.9780" 같은 좌표 붙여넣기 인식
+function _parseLatLng(text) {
+  const m = text.trim().match(/^(-?\d{1,3}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
+function _coordLabel(lat, lng) {
+  return `위도 ${lat.toFixed(5)}, 경도 ${lng.toFixed(5)}`;
 }
 
 async function _searchAddress(query) {
@@ -21,47 +38,77 @@ async function _searchAddress(query) {
   return { results: data.results || [] };
 }
 
-function _renderSearchResults(results) {
-  const box = _el("add-loc-search-results");
+export async function addLocationAtLatLng(latlng, source = "map_click") {
+  await _addLocation({
+    name: _coordLabel(latlng.lat, latlng.lng),
+    lat: latlng.lat,
+    lng: latlng.lng,
+    source,
+  });
+}
+
+async function _addLocation({ name, address, lat, lng, source }) {
+  const resp = await fetch("/api/locations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, address: address || "", lat, lng, source }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    alert(data.error || "저장 실패");
+    return;
+  }
+  const { id } = await resp.json();
+  const newLoc = { id, name, address: address || "", lat, lng, sigungu: "" };
+  _getLocations().push(newLoc);
+  addLocationMarker(newLoc);
+  _onLocationAdded(newLoc);
+}
+
+function _renderCoordResult(box, input, coord) {
+  box.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "result-item";
+  div.textContent = `📍 ${_coordLabel(coord.lat, coord.lng)} 여기에 추가`;
+  div.addEventListener("click", () => {
+    box.innerHTML = "";
+    input.value = "";
+    _addLocation({ name: _coordLabel(coord.lat, coord.lng), lat: coord.lat, lng: coord.lng, source: "paste" });
+  });
+  box.appendChild(div);
+}
+
+function _renderSearchResults(box, input, results) {
   box.innerHTML = "";
   results.forEach((r) => {
     const div = document.createElement("div");
     div.className = "result-item";
     div.textContent = `${r.name} — ${r.address}`;
     div.addEventListener("click", () => {
-      _el("add-loc-name").value = r.name;
-      _el("add-loc-address").value = r.address;
-      _pendingLatLng = { lat: r.lat, lng: r.lng };
-      _el("add-loc-coord").textContent = `좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
       box.innerHTML = "";
+      input.value = "";
+      _addLocation({ name: r.name, address: r.address, lat: r.lat, lng: r.lng, source: "geocode" });
     });
     box.appendChild(div);
   });
 }
 
-function _openModal(latlng, sourceLabel) {
-  _pendingLatLng = latlng;
-  _el("add-loc-name").value = "";
-  _el("add-loc-address").value = "";
-  _el("add-loc-search").value = "";
-  _el("add-loc-search-results").innerHTML = "";
-  _el("add-loc-coord").textContent = latlng
-    ? `좌표: ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)} (${sourceLabel})`
-    : "";
-  _el("add-location-modal").classList.remove("d-none");
-}
-
-function _closeModal() {
-  _el("add-location-modal").classList.add("d-none");
-  _pendingLatLng = null;
-}
-
-export function initLocationsUi(getLocations, onLocationAdded) {
-  _el("add-loc-search").addEventListener("input", (e) => {
+function _bindSearch(inputId, resultsId) {
+  const input = _el(inputId);
+  const box = _el(resultsId);
+  if (!input || !box) return;
+  input.addEventListener("input", (e) => {
     const q = e.target.value.trim();
     clearTimeout(_debounceTimer);
+
+    const coord = _parseLatLng(q);
+    if (coord) {
+      _renderCoordResult(box, input, coord);
+      return;
+    }
+
     if (q.length < 2) {
-      _el("add-loc-search-results").innerHTML = "";
+      box.innerHTML = "";
       return;
     }
     _debounceTimer = setTimeout(async () => {
@@ -69,55 +116,18 @@ export function initLocationsUi(getLocations, onLocationAdded) {
       const { results, error } = await _searchAddress(q);
       if (requestId !== _searchRequestId) return;
       if (error) {
-        _el("add-loc-search-results").innerHTML = `<div class="text-muted small p-1">${error}</div>`;
+        box.innerHTML = `<div class="text-muted small p-1">${error}</div>`;
         return;
       }
-      _renderSearchResults(results);
+      _renderSearchResults(box, input, results);
     }, 300);
-  });
-
-  _el("add-loc-cancel").addEventListener("click", _closeModal);
-
-  _el("add-loc-save").addEventListener("click", async () => {
-    const name = _el("add-loc-name").value.trim();
-    if (!name || !_pendingLatLng) {
-      alert("장소 이름과 위치를 확인하세요.");
-      return;
-    }
-    const resp = await fetch("/api/locations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        address: _el("add-loc-address").value.trim(),
-        lat: _pendingLatLng.lat,
-        lng: _pendingLatLng.lng,
-        source: "map_click",
-      }),
-    });
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({}));
-      alert(data.error || "저장 실패");
-      return;
-    }
-    const { id } = await resp.json();
-    const newLoc = {
-      id, name, address: _el("add-loc-address").value.trim(),
-      lat: _pendingLatLng.lat, lng: _pendingLatLng.lng, sigungu: "",
-    };
-    getLocations().push(newLoc);
-    addLocationMarker(newLoc);
-    onLocationAdded(newLoc);
-    _closeModal();
-  });
-
-  document.getElementById("ctx-add-location")?.addEventListener("click", () => {
-    if (window._pendingCtxLatLngForAdd) {
-      _openModal(window._pendingCtxLatLngForAdd, "지도 클릭");
-    }
   });
 }
 
-export function openAddLocationModalAt(latlng, sourceLabel) {
-  _openModal(latlng, sourceLabel);
+export function initLocationsUi(getLocations, onLocationAdded) {
+  _getLocations = getLocations;
+  _onLocationAdded = onLocationAdded;
+
+  _bindSearch("location-search", "location-search-results");
+  _bindSearch("location-search-m", "location-search-results-m");
 }

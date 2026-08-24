@@ -3,10 +3,15 @@
  */
 import { clearResultLayers, addNumberedMarker, drawPolyline, setMarkerSelected } from "./map.js";
 import { renderTimeline } from "./timeline.js";
+import { setRouteOrder } from "./selection.js";
 
 export function initOptimize(state, locations) {
-  function runOptimize() {
-    const ids = [...state.selected];
+  // fixedOrder=true: 사이드바 목록 순서를 그대로 사용(OR-Tools 미실행).
+  // fixedOrder=false(기본): OR-Tools가 최단 순서를 계산.
+  function runOptimize(fixedOrder = false) {
+    const ids = fixedOrder
+      ? locations.filter((l) => state.selected.has(l.id)).map((l) => l.id)
+      : [...state.selected];
     if (ids.length < 2 || !state.origin) return;
 
     const startTimeEl = document.getElementById("start-time")
@@ -20,6 +25,7 @@ export function initOptimize(state, locations) {
       end: state.destination || null,
       start_time: startTimeEl?.value || "09:00",
       stay_minutes: parseInt(stayEl?.value || "20", 10),
+      fixed_order: fixedOrder,
     };
 
     _showLoading(true);
@@ -63,9 +69,12 @@ function _renderResult(data, locations, state) {
 
   // 번호 마커 추가
   order.forEach((id, i) => {
-    const loc = locations.find((l) => l.id === String(id));
+    const loc = locations.find((l) => String(l.id) === String(id));
     if (loc) addNumberedMarker([loc.lat, loc.lng], i + 1);
   });
+
+  // 좌측 패널에도 같은 순서를 배지로 표시
+  setRouteOrder(order);
 
   // 경로선
   if (data.polyline && data.polyline.length > 1) {

@@ -57,13 +57,14 @@
       <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
       <div id="sigungu-filters" class="d-flex flex-wrap gap-1 mb-2"></div>
 
-      <!-- 검색 (왼쪽 체크박스 = 전체선택 토글) -->
+      <!-- 검색(주소 검색·위경도 붙여넣기 → 클릭 시 바로 추가), 왼쪽 체크박스 = 전체선택 토글 -->
       <div class="d-flex gap-2 align-items-center">
         <input type="checkbox" id="cb-select-all" class="form-check-input flex-shrink-0 mt-0"
           title="보이는 장소 전체선택/해제" style="width:1.1em;height:1.1em;cursor:pointer;" />
         <input type="search" id="location-search" class="form-control form-control-sm flex-grow-1"
-          placeholder="지점명·주소 검색" />
+          placeholder="주소 검색 · 위도,경도 붙여넣기" />
       </div>
+      <div id="location-search-results" class="add-loc-search-results"></div>
     </div>
 
     <!-- 지점 목록 -->
@@ -74,12 +75,17 @@
       <div class="small text-muted mb-1">
         <span id="selection-summary">선택: 0개</span>
       </div>
-      <div class="d-flex gap-2 mb-2">
+      <div class="d-flex gap-2 mb-1">
         <button id="btn-optimize" class="btn btn-primary flex-grow-1" disabled>
           🔄 최적화
         </button>
-        <button id="btn-reset" class="btn btn-outline-secondary flex-grow-1" title="초기화">
-          초기화
+        <button id="btn-fixed-order" class="btn btn-outline-primary flex-grow-1" disabled title="목록 순서 그대로 경로 표시">
+          ▶ 순서대로
+        </button>
+      </div>
+      <div class="text-end mb-2">
+        <button id="btn-reset" class="btn btn-link btn-sm p-0 text-muted" title="초기화">
+          ↺ 초기화
         </button>
       </div>
       <button id="btn-multiday" class="btn btn-outline-primary w-100" disabled title="N일 경로 계획">
@@ -148,20 +154,24 @@
         <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
         <div id="sigungu-filters-m" class="d-flex flex-wrap gap-1 mb-2"></div>
 
-        <!-- 검색 (왼쪽 체크박스 = 전체선택 토글) -->
+        <!-- 검색(주소 검색·위경도 붙여넣기 → 클릭 시 바로 추가), 왼쪽 체크박스 = 전체선택 토글 -->
         <div class="d-flex gap-2 align-items-center">
           <input type="checkbox" id="cb-select-all-m" class="form-check-input flex-shrink-0 mt-0"
             title="보이는 장소 전체선택/해제" style="width:1.1em;height:1.1em;cursor:pointer;" />
           <input type="search" id="location-search-m" class="form-control form-control-sm flex-grow-1"
-            placeholder="지점명·주소 검색" />
+            placeholder="주소 검색 · 위도,경도 붙여넣기" />
         </div>
+        <div id="location-search-results-m" class="add-loc-search-results"></div>
       </div>
       <div id="location-list-m" class="flex-grow-1 overflow-auto px-2 py-1"></div>
       <div class="px-3 py-2 border-top action-bar">
         <div class="small text-muted mb-1"><span id="selection-summary-m">선택: 0개</span></div>
         <div class="d-flex gap-2 mb-1">
           <button id="btn-optimize-m" class="btn btn-primary flex-grow-1" disabled>🔄 최적화</button>
-          <button id="btn-reset-m" class="btn btn-outline-secondary flex-grow-1" title="초기화">초기화</button>
+          <button id="btn-fixed-order-m" class="btn btn-outline-primary flex-grow-1" disabled title="목록 순서 그대로 경로 표시">▶ 순서대로</button>
+        </div>
+        <div class="text-end mb-1">
+          <button id="btn-reset-m" class="btn btn-link btn-sm p-0 text-muted" title="초기화">↺ 초기화</button>
         </div>
         <button id="btn-multiday-m" class="btn btn-outline-primary w-100" disabled title="N일 경로 계획">
           📅 N일 계획
@@ -243,23 +253,6 @@
     <li><button id="ctx-set-dest" class="ctx-menu-item">🏁 여기서 종료</button></li>
     <li><button id="ctx-add-location" class="ctx-menu-item">➕ 여기에 장소 추가</button></li>
   </ul>
-</div>
-
-<!-- 장소 추가 모달 -->
-<div id="add-location-modal" class="d-none add-location-modal">
-  <div class="add-location-card">
-    <h6 class="mb-2">장소 추가</h6>
-    <input type="search" id="add-loc-search" class="form-control form-control-sm mb-1"
-      placeholder="주소·장소명 검색" />
-    <div id="add-loc-search-results" class="add-loc-search-results"></div>
-    <input type="text" id="add-loc-name" class="form-control form-control-sm mt-2" placeholder="장소 이름" />
-    <input type="text" id="add-loc-address" class="form-control form-control-sm mt-1" placeholder="주소(선택)" />
-    <div class="small text-muted mt-1" id="add-loc-coord"></div>
-    <div class="d-flex gap-2 mt-2">
-      <button id="add-loc-save" class="btn btn-primary btn-sm flex-grow-1">저장</button>
-      <button id="add-loc-cancel" class="btn btn-outline-secondary btn-sm flex-grow-1">취소</button>
-    </div>
-  </div>
 </div>
 
 <!-- 로딩 오버레이 -->

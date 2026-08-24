@@ -5,11 +5,11 @@ import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
          onMarkerClick, invalidateMobileMapSize,
          enableBoxSelect, onBoxSelect } from "./map.js";
-import { initSelection, clearSelection, selectByIds, refreshLocationList } from "./selection.js";
+import { initSelection, clearSelection, selectByIds, refreshLocationList, clearRouteOrder } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
 import { fetchLocations, logout } from "./auth.js";
-import { initLocationsUi, openAddLocationModalAt } from "./locations_ui.js";
+import { initLocationsUi, addLocationAtLatLng } from "./locations_ui.js";
 
 let LOCATIONS = [];
 
@@ -51,7 +51,6 @@ let _ctxJustShown = false;
 
 function showContextMenu(latlng, pageX, pageY) {
   _pendingCtxLatLng = latlng;
-  window._pendingCtxLatLngForAdd = latlng; // locations_ui.js에서 참조
   ctxMenu.style.left = `${pageX}px`;
   ctxMenu.style.top  = `${pageY}px`;
   ctxMenu.classList.remove("d-none");
@@ -95,6 +94,12 @@ ctxSetDest.addEventListener("click", () => {
   if (window.innerWidth < 768) {
     document.getElementById("tab-list-btn")?.click();
   }
+});
+
+document.getElementById("ctx-add-location")?.addEventListener("click", () => {
+  if (!_pendingCtxLatLng) return;
+  addLocationAtLatLng(_pendingCtxLatLng);
+  hideContextMenu();
 });
 
 // ── GPS 버튼 ──────────────────────────────────────────────────────────────────
@@ -231,7 +236,7 @@ export function updateDestLabel() {
 
 export function updateOptimizeButton() {
   const enabled = state.selected.size >= 2 && !!state.origin;
-  ["btn-optimize", "btn-optimize-m"].forEach((id) => {
+  ["btn-optimize", "btn-optimize-m", "btn-fixed-order", "btn-fixed-order-m"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = !enabled;
   });
@@ -285,6 +290,7 @@ export function updateSelectionSummary() {
 // ── 초기화 버튼 ───────────────────────────────────────────────────────────────
 function resetAll() {
   clearSelection();
+  clearRouteOrder();
   _clearOrigin();
   _clearDest();
   clearResultLayers();
@@ -313,7 +319,17 @@ function resetAll() {
   if (el) {
     el.addEventListener("click", () => {
       const { runOptimize } = window._optimizeModule;
-      if (runOptimize) runOptimize();
+      if (runOptimize) runOptimize(false);
+    });
+  }
+});
+
+["btn-fixed-order", "btn-fixed-order-m"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener("click", () => {
+      const { runOptimize } = window._optimizeModule;
+      if (runOptimize) runOptimize(true);
     });
   }
 });

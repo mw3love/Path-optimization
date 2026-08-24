@@ -4,7 +4,7 @@
 
 function _buildDialog() {
   // 재오픈 시 이전 공유 다이얼로그가 남아 있으면 제거(DOM id 중복 방지).
-  // locations_ui.js의 추가 모달은 "add-location-modal" 클래스만 갖고 id가 없으므로,
+  // ".add-location-modal" 클래스는 다른 다이얼로그와도 공유되므로,
   // 공유 다이얼로그에만 붙는 data-role로 구분해 그것만 제거한다.
   document.querySelectorAll('.add-location-modal[data-role="share-dialog"]').forEach((el) => el.remove());
 
