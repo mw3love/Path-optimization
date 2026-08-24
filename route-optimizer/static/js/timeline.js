@@ -2,8 +2,8 @@
  * timeline.js — 타임라인 패널 렌더 + 번호 DivIcon 스타일
  */
 
-export function renderTimeline(data, locations) {
-  const html = _buildTimelineHtml(data, locations);
+export function renderTimeline(data, locations, options = {}) {
+  const html = _buildTimelineHtml(data, locations, options);
 
   // 데스크톱: result-panel (지도 위 오버레이) — 모바일에서는 표시하지 않음
   const panel = document.getElementById("result-panel");
@@ -19,11 +19,14 @@ export function renderTimeline(data, locations) {
   }
 }
 
-export function buildTimelineHtml(data, locations) {
-  return _buildTimelineHtml(data, locations);
+export function buildTimelineHtml(data, locations, options = {}) {
+  return _buildTimelineHtml(data, locations, options);
 }
 
-function _buildTimelineHtml(data, locations) {
+// originAsNumber: true면 출발지를 ⭐ 대신 "1"로, 방문지는 2번부터 표시
+// (단일 최적화 화면 전용 — N일 계획은 하루마다 출발점이 달라 기존 ⭐/1,2,3.. 유지)
+function _buildTimelineHtml(data, locations, options = {}) {
+  const originAsNumber = !!options.originAsNumber;
   const isApprox = data.source === "haversine";
   const legs = data.legs || [];
   const order = data.order || [];
@@ -65,7 +68,7 @@ function _buildTimelineHtml(data, locations) {
 
   // 출발지 행 (이동 시간 없음)
   html += `<tr style="background:#e8f4fd;">
-    <td class="leg-num">⭐</td>
+    <td class="leg-num">${originAsNumber ? "1" : "⭐"}</td>
     <td>${_esc(startLabel)}</td>
     <td>—</td>
     <td>${legs[0] ? _subtractMinutes(legs[0].arrive, legs[0].drive_min) : ""}</td>
@@ -73,6 +76,7 @@ function _buildTimelineHtml(data, locations) {
   </tr>`;
 
   // 각 방문 지점
+  const stopStartNum = originAsNumber ? 2 : 1;
   order.forEach((id, i) => {
     const loc = locMap[String(id)];
     const leg = legs[i] || {};
@@ -81,7 +85,7 @@ function _buildTimelineHtml(data, locations) {
       : "—";
 
     html += `<tr>
-      <td class="leg-num">${i + 1}</td>
+      <td class="leg-num">${i + stopStartNum}</td>
       <td>
         <div class="loc-name">${_esc(loc ? loc.name : id)}</div>
         ${loc ? `<div class="loc-sub">${_esc(loc.sigungu)}</div>` : ""}

@@ -67,10 +67,10 @@ function _renderResult(data, locations, state) {
     setMarkerSelected(id, false);
   }
 
-  // 번호 마커 추가
+  // 번호 마커 추가 — 출발지가 "1"이므로 방문지는 2번부터
   order.forEach((id, i) => {
     const loc = locations.find((l) => String(l.id) === String(id));
-    if (loc) addNumberedMarker([loc.lat, loc.lng], i + 1);
+    if (loc) addNumberedMarker([loc.lat, loc.lng], i + 2);
   });
 
   // 좌측 패널에도 같은 순서를 배지로 표시
@@ -81,8 +81,8 @@ function _renderResult(data, locations, state) {
     drawPolyline(data.polyline);
   }
 
-  // 타임라인 + 내비 버튼 렌더
-  renderTimeline(data, locations);
+  // 타임라인 + 내비 버튼 렌더 — 출발지를 "1"로 표시(좌패널·지도 마커와 통일)
+  renderTimeline(data, locations, { originAsNumber: true });
 
   // 모바일: 경로 탭으로 자동 전환
   const tabResult = document.getElementById("tab-result-btn");

@@ -5,7 +5,7 @@ import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
          onMarkerClick, invalidateMobileMapSize,
          enableBoxSelect, onBoxSelect } from "./map.js";
-import { initSelection, clearSelection, selectByIds, refreshLocationList, clearRouteOrder } from "./selection.js";
+import { initSelection, clearSelection, selectByIds, refreshLocationList, clearRouteOrder, refreshAnchorBadges } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
 import { fetchLocations, logout } from "./auth.js";
@@ -25,17 +25,44 @@ export const state = {
   selected: new Set(),
 };
 
+// 출발지/도착지를 바꿀 때는 항상 이 두 헬퍼를 거친다 — 좌패널 지점 목록의
+// 동기화 표시(①/🏁, 상/하단 고정 배치, selection.js)를 매번 갱신해야 하기 때문.
+// 이미 값이 있어도 경고 없이 그냥 덮어쓴다(우클릭 "여기서 출발/종료"와 동일 동작).
+function _setOrigin(origin) {
+  state.origin = origin;
+  refreshAnchorBadges();
+}
+
+function _setDestination(dest) {
+  state.destination = dest;
+  refreshAnchorBadges();
+}
+
 // ── 출발지/도착지 클리어 헬퍼 ────────────────────────────────────────────────
 function _clearOrigin() {
-  state.origin = null;
+  _setOrigin(null);
   clearOriginMarker();
   updateOriginLabel();
   updateOptimizeButton();
 }
 
 function _clearDest() {
-  state.destination = null;
+  _setDestination(null);
   clearDestMarker();
+  updateDestLabel();
+}
+
+// 좌패널 지점을 출발지/도착지로 설정할 때 selection.js가 호출(우클릭 메뉴와 동일 로직).
+function _setOriginFromLocation(loc) {
+  _setOrigin({ lat: loc.lat, lng: loc.lng, label: loc.name });
+  setOriginMarker({ lat: loc.lat, lng: loc.lng }, _clearOrigin);
+  updateOriginLabel();
+  updateOptimizeButton();
+}
+
+function _setDestinationFromLocation(loc) {
+  _setDestination({ lat: loc.lat, lng: loc.lng, label: loc.name });
+  setDestMarker({ lat: loc.lat, lng: loc.lng }, _clearDest);
   updateDestLabel();
 }
 
@@ -73,7 +100,7 @@ ctxMenu.addEventListener("touchend", (e) => e.stopPropagation());
 
 ctxSetOrigin.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
-  state.origin = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED };
+  _setOrigin({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED });
   setOriginMarker(_pendingCtxLatLng, _clearOrigin);
   updateOriginLabel();
   updateOptimizeButton();
@@ -86,7 +113,7 @@ ctxSetOrigin.addEventListener("click", () => {
 
 ctxSetDest.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
-  state.destination = { lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED };
+  _setDestination({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED });
   setDestMarker(_pendingCtxLatLng, _clearDest);
   updateDestLabel();
   hideContextMenu();
@@ -117,11 +144,11 @@ function setupGpsButton(btnId) {
       (pos) => {
         btn.disabled = false;
         btn.textContent = "📍";
-        state.origin = {
+        _setOrigin({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           label: LABEL_GPS_SELECTED,
-        };
+        });
         setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
         updateOriginLabel();
         updateOptimizeButton();
@@ -335,26 +362,35 @@ function resetAll() {
 });
 
 // ── 자동 현재 위치 설정 (페이지 로드 시) ────────────────────────────────────
-function _autoSetCurrentLocation() {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const coord = { lat: pos.coords.latitude, lng: pos.coords.longitude, label: LABEL_GPS_SELECTED };
-      state.origin      = { ...coord };
-      state.destination = { ...coord };
-      setOriginMarker({ lat: coord.lat, lng: coord.lng }, _clearOrigin);
-      setDestMarker({ lat: coord.lat, lng: coord.lng }, _clearDest);
-      updateOriginLabel();
-      updateDestLabel();
-      updateOptimizeButton();
-    },
-    () => {}, // 실패 시 조용히 무시
-    { timeout: 8000 }
-  );
+// GPS 요청은 fetchLocations()/지도 초기화와 무관하므로 _init() 맨 앞에서 병렬로 쏘고,
+// maximumAge로 최근 캐시된 위치가 있으면 즉시 반환받아 체감 속도를 줄인다.
+// 단, 마커를 찍으려면 initMaps() 이후여야 하므로 좌표만 Promise로 넘기고
+// 실제 반영(_applyCurrentLocation)은 지도 준비가 끝난 뒤 수행한다.
+function _requestCurrentLocation() {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, label: LABEL_GPS_SELECTED }),
+      () => resolve(null), // 실패 시 조용히 무시
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  });
+}
+
+function _applyCurrentLocation(coord) {
+  if (!coord) return;
+  _setOrigin({ ...coord });
+  _setDestination({ ...coord });
+  setOriginMarker({ lat: coord.lat, lng: coord.lng }, _clearOrigin);
+  setDestMarker({ lat: coord.lat, lng: coord.lng }, _clearDest);
+  updateOriginLabel();
+  updateDestLabel();
+  updateOptimizeButton();
 }
 
 // ── 초기화 (비동기: 지점 목록을 먼저 받아온 뒤 지도/선택/최적화 모듈을 구성) ──
 async function _init() {
+  const gpsPromise = _requestCurrentLocation();
   LOCATIONS = await fetchLocations();
 
   initMaps(LOCATIONS, showContextMenu);
@@ -367,7 +403,16 @@ async function _init() {
     if (window._selectionModule) window._selectionModule.toggleById(id);
   });
 
-  initSelection(LOCATIONS, state, { updateSelectionSummary, updateOptimizeButton });
+  initSelection(LOCATIONS, state, {
+    updateSelectionSummary,
+    updateOptimizeButton,
+    setOriginFromLocation: _setOriginFromLocation,
+    setDestinationFromLocation: _setDestinationFromLocation,
+  });
+  // initSelection이 기본적으로 전체 지점을 선택 상태로 채우므로, 정적 템플릿의
+  // "선택: 0개"/버튼 disabled 기본값을 실제 상태로 갱신해야 한다.
+  updateSelectionSummary();
+  updateOptimizeButton();
 
   initLocationsUi(() => LOCATIONS, (newLoc) => {
     refreshLocationList(newLoc);
@@ -384,7 +429,7 @@ async function _init() {
     if (el) el.addEventListener("click", () => _multidayModule.runGrouping());
   });
 
-  _autoSetCurrentLocation();
+  _applyCurrentLocation(await gpsPromise);
 }
 
 _init();

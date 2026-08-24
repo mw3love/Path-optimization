@@ -159,6 +159,20 @@ export function setMarkerSelected(id, selected) {
   });
 }
 
+// 지점이 출발지/도착지 역할을 하는 동안, 그 지점 고유의 원형 마커를 숨겨
+// 출발/도착 핀 아이콘과 겹쳐 보이지 않게 한다(selection.js가 매 렌더마다 호출).
+export function setLocationMarkerVisible(id, visible) {
+  const entry = _markers[id];
+  if (!entry) return;
+  if (visible) {
+    if (!_map.hasLayer(entry.marker)) entry.marker.addTo(_map);
+    if (!_mapMobile.hasLayer(entry.markerM)) entry.markerM.addTo(_mapMobile);
+  } else {
+    if (_map.hasLayer(entry.marker)) _map.removeLayer(entry.marker);
+    if (_mapMobile.hasLayer(entry.markerM)) _mapMobile.removeLayer(entry.markerM);
+  }
+}
+
 export function panToLocation(id) {
   const entry = _markers[id];
   if (!entry) return;
@@ -171,30 +185,34 @@ let _originMarkerM = null;
 let _destMarker    = null;
 let _destMarkerM   = null;
 
-const _starIcon = L.divIcon({
-  className: "",
-  html: '<div style="font-size:22px;line-height:1;">⭐</div>',
-  iconAnchor: [11, 22],
-});
+// 물방울(핀) 모양 아이콘 — 지도 타일의 빨간 "+" 기호나 지점 원형 마커와
+// 실루엣이 달라 눈에 잘 띈다. 안은 라벨(출발지="1", 도착지="🏁")로 구분.
+function _pinIcon(color, label, fontSize) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="anchor-pin-wrap">
+      <div class="anchor-pin" style="background:${color};"></div>
+      <div class="anchor-pin-label" style="font-size:${fontSize};">${label}</div>
+    </div>`,
+    iconAnchor: [14, 34],
+  });
+}
 
-const _flagIcon = L.divIcon({
-  className: "",
-  html: '<div style="font-size:22px;line-height:1;">🏁</div>',
-  iconAnchor: [11, 22],
-});
+const _originIcon = _pinIcon("#34a853", "1", "14px");
+const _destIcon    = _pinIcon("#ea8600", "🏁", "13px");
 
 export function setOriginMarker(latlng) {
   [_originMarker, _originMarkerM].forEach((m) => m && m.remove());
-  _originMarker  = L.marker(latlng, { icon: _starIcon }).addTo(_map).bindPopup("⭐ 출발지");
-  _originMarkerM = L.marker(latlng, { icon: _starIcon }).addTo(_mapMobile).bindPopup("⭐ 출발지");
+  _originMarker  = L.marker(latlng, { icon: _originIcon }).addTo(_map).bindPopup("출발지");
+  _originMarkerM = L.marker(latlng, { icon: _originIcon }).addTo(_mapMobile).bindPopup("출발지");
   _map.flyTo(latlng, Math.max(_map.getZoom(), 13));
   _mapMobile.flyTo(latlng, Math.max(_mapMobile.getZoom(), 13));
 }
 
 export function setDestMarker(latlng) {
   [_destMarker, _destMarkerM].forEach((m) => m && m.remove());
-  _destMarker  = L.marker(latlng, { icon: _flagIcon }).addTo(_map).bindPopup("🏁 도착지");
-  _destMarkerM = L.marker(latlng, { icon: _flagIcon }).addTo(_mapMobile).bindPopup("🏁 도착지");
+  _destMarker  = L.marker(latlng, { icon: _destIcon }).addTo(_map).bindPopup("도착지");
+  _destMarkerM = L.marker(latlng, { icon: _destIcon }).addTo(_mapMobile).bindPopup("도착지");
 }
 
 export function clearDestMarker() {

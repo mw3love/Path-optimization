@@ -9,6 +9,9 @@ let _searchRequestId = 0;
 let _getLocations = null;
 let _onLocationAdded = null;
 
+// 세션 내 동일 검색어 재조회 방지용 캐시(탭 새로고침 시 초기화)
+const _searchCache = new Map();
+
 function _el(id) {
   return document.getElementById(id);
 }
@@ -29,13 +32,17 @@ function _coordLabel(lat, lng) {
 }
 
 async function _searchAddress(query) {
+  if (_searchCache.has(query)) return _searchCache.get(query);
+
   const resp = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
     return { error: data.error || "검색 실패" };
   }
   const data = await resp.json();
-  return { results: data.results || [] };
+  const result = { results: data.results || [] };
+  _searchCache.set(query, result); // 에러 응답은 캐시하지 않음(일시 오류 재시도 가능해야 함)
+  return result;
 }
 
 export async function addLocationAtLatLng(latlng, source = "map_click") {
@@ -120,7 +127,7 @@ function _bindSearch(inputId, resultsId) {
         return;
       }
       _renderSearchResults(box, input, results);
-    }, 300);
+    }, 150);
   });
 }
 

@@ -211,6 +211,17 @@ html, body {
   box-shadow: inset 0 2px 0 0 #1a73e8;
 }
 
+/* 출발지/도착지 역할을 하는 지점 행 — 목록 맨 위/맨 아래에 고정 배치되며(selection.js)
+   색으로도 "선택 가능한 옵션이 아니라 고정값"임을 강조한다. */
+.location-item.is-origin {
+  background: #e6f4ea;
+  box-shadow: inset 3px 0 0 0 #34a853;
+}
+.location-item.is-destination {
+  background: #fdece0;
+  box-shadow: inset 3px 0 0 0 #ea8600;
+}
+
 /* 최적화/순서대로 실행 결과의 실제 방문 순서 — 지도 번호 마커와 같은 색 */
 .loc-route-badge {
   flex-shrink: 0;
@@ -225,6 +236,23 @@ html, body {
   align-items: center;
   justify-content: center;
 }
+
+/* 출발지(①)/도착지(🏁) 배지 — loc-route-badge보다 한 단계 크게 잡아 시인성을 높이고,
+   둘을 같은 원형 스타일로 통일해 대비가 밀리지 않게 한다. */
+.loc-anchor-badge {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loc-anchor-badge.badge-origin { background: #34a853; }
+.loc-anchor-badge.badge-dest   { background: #ea8600; }
 
 .location-item .loc-name {
   font-weight: 500;
@@ -371,6 +399,41 @@ html, body {
   justify-content: center;
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+
+/* ── 출발지/도착지 핀 마커 ────────────────────────────────── */
+/* 모양(회전된 사각형)과 라벨을 형제 요소로 분리 — 라벨은 회전을 상속하지 않아
+   텍스트가 항상 똑바로 보인다. */
+
+.anchor-pin-wrap {
+  position: relative;
+  width: 28px;
+  height: 34px;
+}
+.anchor-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+.anchor-pin-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: bold;
+  line-height: 1;
 }
 
 /* ── N일 계획: 결과 패널 (데스크톱 오버레이) ─────────────── */
@@ -987,25 +1050,15 @@ html, body {
   font-size: 0.72rem;
 }
 
-.add-location-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.add-location-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
-  width: 320px;
-  max-width: 90vw;
-}
 .add-loc-search-results {
-  max-height: 160px;
+  max-height: 45vh;
   overflow-y: auto;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+.add-loc-search-results:empty {
+  border: none;
 }
 .add-loc-search-results .result-item {
   padding: 4px 6px;
