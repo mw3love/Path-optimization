@@ -81,8 +81,43 @@ export function initMap(containerId, locations, onContextMenu) {
 
   map.on("click", (e) => _fireMapClick(e.latlng));
 
+  // 우클릭: 이동 없이 누르고 떼면 컨텍스트 메뉴, 누른 채 움직이면 지도 팬(이동).
+  // 좌클릭 드래그/휠클릭 드래그와 별개의 팬 경로이므로 상태를 map 인스턴스별로 분리한다.
+  let _rmbDown = false;
+  let _rmbMoved = false;
+  let _rmbLastX = 0, _rmbLastY = 0;
+  let _rmbStartX = 0, _rmbStartY = 0;
+  const container = map.getContainer();
+
+  container.addEventListener("mousedown", (e) => {
+    if (e.button !== 2 || _boxSelectActive) return;
+    _rmbDown = true;
+    _rmbMoved = false;
+    _rmbLastX = _rmbStartX = e.clientX;
+    _rmbLastY = _rmbStartY = e.clientY;
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!_rmbDown) return;
+    const dx = e.clientX - _rmbLastX;
+    const dy = e.clientY - _rmbLastY;
+    if (dx === 0 && dy === 0) return;
+    if (Math.abs(e.clientX - _rmbStartX) > 3 || Math.abs(e.clientY - _rmbStartY) > 3) {
+      _rmbMoved = true;
+    }
+    map.panBy([-dx, -dy], { animate: false });
+    _rmbLastX = e.clientX;
+    _rmbLastY = e.clientY;
+  });
+
+  document.addEventListener("mouseup", (e) => {
+    if (e.button !== 2) return;
+    _rmbDown = false;
+  });
+
   map.on("contextmenu", (e) => {
     e.originalEvent.preventDefault();
+    if (_rmbMoved) { _rmbMoved = false; return; }
     if (_onContextMenu) _onContextMenu(e.latlng, e.originalEvent.pageX, e.originalEvent.pageY);
   });
 
