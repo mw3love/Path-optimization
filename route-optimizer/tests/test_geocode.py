@@ -15,16 +15,28 @@ class _FakeResponse:
         return self._payload
 
 
-def test_is_configured_false_without_key(monkeypatch):
-    monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
+def test_search_falls_back_to_nominatim_without_kakao_key(monkeypatch):
     monkeypatch.setattr(geocode, "KAKAO_API_KEY", "")
-    assert geocode.is_configured() is False
 
+    def fake_get(url, params=None, headers=None, timeout=None):
+        assert url == geocode.NOMINATIM_URL
+        return _FakeResponse([
+            {
+                "name": "Tour Eiffel",
+                "display_name": "Tour Eiffel, 5, Avenue Anatole France, Paris, France",
+                "lat": "48.8584",
+                "lon": "2.2945",
+            }
+        ])
 
-def test_search_raises_without_key(monkeypatch):
-    monkeypatch.setattr(geocode, "KAKAO_API_KEY", "")
-    with pytest.raises(RuntimeError):
-        geocode.search("전주역")
+    monkeypatch.setattr(geocode.requests, "get", fake_get)
+    results = geocode.search("에펠탑")
+    assert results == [{
+        "name": "Tour Eiffel",
+        "address": "Tour Eiffel, 5, Avenue Anatole France, Paris, France",
+        "lat": 48.8584,
+        "lng": 2.2945,
+    }]
 
 
 def test_search_parses_kakao_response(monkeypatch):

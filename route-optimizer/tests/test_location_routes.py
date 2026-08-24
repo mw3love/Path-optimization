@@ -159,9 +159,69 @@ def test_create_location_rejects_non_numeric_lat_lng(client, capsys):
     assert "error" in resp.get_json()
 
 
-def test_geocode_returns_503_without_key(client, capsys, monkeypatch):
+def test_geocode_falls_back_to_nominatim_without_kakao_key(client, capsys, monkeypatch):
     import geocode
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [{
+                "name": "Tour Eiffel",
+                "display_name": "Tour Eiffel, Paris, France",
+                "lat": "48.8584",
+                "lon": "2.2945",
+            }]
+
     monkeypatch.setattr(geocode, "KAKAO_API_KEY", "")
+    monkeypatch.setattr(geocode.requests, "get", lambda *a, **kw: _FakeResponse())
     _login(client, "a@company.com", capsys)
-    resp = client.get("/api/geocode?q=전주역")
-    assert resp.status_code == 503
+    resp = client.get("/api/geocode?q=eiffel")
+    assert resp.status_code == 200
+    assert resp.get_json()["results"][0]["name"] == "Tour Eiffel"
+
+
+def test_create_location_accepts_paste_source(client, capsys):
+    _login(client, "a@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "위도 37.5, 경도 127.0", "address": "", "lat": 37.5, "lng": 127.0, "source": "paste",
+    })
+    assert resp.status_code == 201
+
+
+def test_owner_can_rename_location(client, capsys):
+    _login(client, "a@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "위도 37.5, 경도 127.0", "address": "", "lat": 37.5, "lng": 127.0, "source": "paste",
+    })
+    loc_id = resp.get_json()["id"]
+    rename_resp = client.patch(f"/api/locations/{loc_id}/name", json={"name": "우리 지사"})
+    assert rename_resp.status_code == 200
+
+    list_resp = client.get("/api/locations")
+    names = {l["id"]: l["name"] for l in list_resp.get_json()["locations"]}
+    assert names[loc_id] == "우리 지사"
+
+
+def test_non_owner_cannot_rename_location(client, capsys):
+    _login(client, "a@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "우리집", "address": "서울", "lat": 37.5, "lng": 127.0, "source": "map_click",
+    })
+    loc_id = resp.get_json()["id"]
+    client.post("/auth/logout")
+
+    _login(client, "b@company.com", capsys)
+    rename_resp = client.patch(f"/api/locations/{loc_id}/name", json={"name": "가로채기"})
+    assert rename_resp.status_code == 403
+
+
+def test_rename_rejects_empty_name(client, capsys):
+    _login(client, "a@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "위도 37.5, 경도 127.0", "address": "", "lat": 37.5, "lng": 127.0, "source": "paste",
+    })
+    loc_id = resp.get_json()["id"]
+    rename_resp = client.patch(f"/api/locations/{loc_id}/name", json={"name": "  "})
+    assert rename_resp.status_code == 400

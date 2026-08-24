@@ -197,6 +197,7 @@ def optimize():
     end = body.get("end")      # {lat, lng, label} | null
     start_time_str = body.get("start_time", "09:00")
     stay_minutes = int(body.get("stay_minutes", 20))
+    fixed_order = bool(body.get("fixed_order", False))
 
     if len(location_ids) < 2:
         return jsonify({"error": "최소 2개 지점이 필요합니다"}), 400
@@ -227,14 +228,17 @@ def optimize():
     matrix = get_matrix(coords, keys)
     source = matrix["source"]
 
-    # ── OR-Tools TSP ─────────────────────────────────────────────────────────
+    # ── 방문 순서 결정 ────────────────────────────────────────────────────────
+    # fixed_order: 사이드바 목록 순서를 그대로 사용(OR-Tools 미실행).
+    # 아니면 OR-Tools TSP로 최단 순서 계산.
     start_idx = 0
-    end_idx = len(keys) - 1 if has_end else None
-
-    route_indices = solve(matrix, start_idx=start_idx, end_idx=end_idx)
-
-    # route_indices: 선택 지점 인덱스(1..n) 순서. 출발/도착 제외.
-    ordered_ids = [keys[i] for i in route_indices if keys[i] not in ("__start__", "__end__")]
+    if fixed_order:
+        ordered_ids = list(location_ids)
+    else:
+        end_idx = len(keys) - 1 if has_end else None
+        route_indices = solve(matrix, start_idx=start_idx, end_idx=end_idx)
+        # route_indices: 선택 지점 인덱스(1..n) 순서. 출발/도착 제외.
+        ordered_ids = [keys[i] for i in route_indices if keys[i] not in ("__start__", "__end__")]
 
     # ── Legs 조립 ─────────────────────────────────────────────────────────────
     end_key = "__end__" if has_end else None
@@ -777,7 +781,7 @@ def api_locations_create():
     source = body.get("source", "map_click")
     if not name or lat is None or lng is None:
         return jsonify({"error": "name, lat, lng는 필수입니다"}), 400
-    if source not in ("geocode", "gps", "map_click"):
+    if source not in ("geocode", "gps", "map_click", "paste"):
         return jsonify({"error": f"알 수 없는 source: {source}"}), 400
     try:
         lat, lng = float(lat), float(lng)
@@ -827,6 +831,20 @@ def api_locations_visibility(location_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/locations/<int:location_id>/name", methods=["PATCH"])
+@auth.login_required
+def api_locations_rename(location_id):
+    from flask import g
+    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
+        return jsonify({"error": "본인 소유 지점만 관리할 수 있습니다"}), 403
+    body = request.get_json(force=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "이름을 입력하세요"}), 400
+    locrepo.set_name(g.db, location_id, name)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/geocode")
 @auth.login_required
 def api_geocode():
@@ -834,8 +852,6 @@ def api_geocode():
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify({"results": []})
-    if not geocode.is_configured():
-        return jsonify({"error": "주소 검색이 설정되지 않았습니다. GPS나 지도 클릭으로 추가하세요."}), 503
     try:
         results = geocode.search(q)
     except Exception as e:

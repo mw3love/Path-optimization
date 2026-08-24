@@ -75,3 +75,11 @@ def test_list_shares(db):
     repo.add_share(db, loc_id, "b@company.com")
     repo.add_share(db, loc_id, "c@company.com")
     assert set(repo.list_shares(db, loc_id)) == {"b@company.com", "c@company.com"}
+
+
+def test_set_name_updates_location_name(db):
+    a = get_or_create_user(db, "a@company.com")
+    loc_id = repo.create_location(db, a, "위도 37.5, 경도 127.0", "", 37.5, 127.0, "paste")
+    repo.set_name(db, loc_id, "우리 지사")
+    updated = repo.get_location(db, loc_id)
+    assert updated["name"] == "우리 지사"

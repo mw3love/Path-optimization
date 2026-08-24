@@ -63,6 +63,29 @@ def test_optimize_uses_db_locations(client, capsys):
     assert set(data["order"]) == set(ids)
 
 
+def test_optimize_fixed_order_preserves_given_sequence(client, capsys):
+    _login(client, "a@company.com", capsys)
+    ids = []
+    # 의도적으로 A가 C보다 훨씬 멀어 최적화라면 절대 이 순서를 고르지 않게 배치
+    for name, lat, lng in [("A", 36.50, 128.50), ("B", 35.83, 127.16), ("C", 35.82, 127.15)]:
+        r = client.post("/api/locations", json={
+            "name": name, "address": "", "lat": lat, "lng": lng, "source": "map_click",
+        })
+        ids.append(str(r.get_json()["id"]))
+
+    resp = client.post("/api/optimize", json={
+        "location_ids": ids,
+        "start": {"lat": 35.82, "lng": 127.14, "label": "출발"},
+        "end": None,
+        "start_time": "09:00",
+        "stay_minutes": 10,
+        "fixed_order": True,
+    })
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["order"] == ids
+
+
 def test_optimize_rejects_location_not_visible_to_user(client, capsys):
     _login(client, "a@company.com", capsys)
     r = client.post("/api/locations", json={

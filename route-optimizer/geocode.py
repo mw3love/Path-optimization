@@ -1,8 +1,7 @@
 """
-geocode.py — 카카오 로컬 API 프록시 (키워드 검색) + Nominatim(OSM) 해외 폴백.
-KAKAO_REST_API_KEY 미설정 시 is_configured()가 False를 반환하고,
-search()는 RuntimeError를 던진다 — 호출부(Flask 라우트)가 503으로 변환한다.
-카카오 키가 있어도 검색 결과가 없으면(주로 국외 주소) Nominatim으로 폴백한다.
+geocode.py — 카카오 로컬 API 프록시 (키워드 검색) + Nominatim(OSM) 폴백.
+카카오 키가 없거나, 있어도 결과가 없으면(주로 국외 주소) Nominatim으로 폴백한다.
+Nominatim은 키가 필요 없어 KAKAO_REST_API_KEY 미설정 상태에서도 검색 자체는 항상 동작한다.
 """
 import os
 import requests
@@ -14,17 +13,11 @@ NOMINATIM_USER_AGENT = os.environ.get("NOMINATIM_USER_AGENT", "path-optimization
 TIMEOUT = 5
 
 
-def is_configured() -> bool:
-    return bool(KAKAO_API_KEY)
-
-
 def search(query: str) -> list:
-    if not KAKAO_API_KEY:
-        raise RuntimeError("KAKAO_REST_API_KEY 미설정")
-
-    results = _search_kakao(query)
-    if results:
-        return results
+    if KAKAO_API_KEY:
+        results = _search_kakao(query)
+        if results:
+            return results
     return _search_nominatim(query)
 
 

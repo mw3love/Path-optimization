@@ -20,7 +20,7 @@ pip install -r requirements.txt
 SECRET_KEY=<random> python app.py   # https://localhost:5000 (cert.pem/key.pem 있으면 HTTPS 자동 활성화)
 ```
 
-`SECRET_KEY` 환경변수가 없으면 서버가 시작하지 않는다(세션 위조 방지). 로컬 테스트만 할 땐 `ALLOW_INSECURE_DEV_KEY=1`로 우회 가능 — 운영 배포 시 금지. `KAKAO_REST_API_KEY` 없으면 주소검색만 비활성화되고 GPS·지도클릭 장소 추가는 정상 동작.
+`SECRET_KEY` 환경변수가 없으면 서버가 시작하지 않는다(세션 위조 방지). 로컬 테스트만 할 땐 `ALLOW_INSECURE_DEV_KEY=1`로 우회 가능 — 운영 배포 시 금지. `KAKAO_REST_API_KEY` 없어도 주소검색은 Nominatim(OSM, 무료·키 불필요)으로 계속 동작한다 — 카카오는 국내 주소 정확도를 높이는 우선 경로일 뿐, 필수 아님. GPS·지도클릭 장소 추가는 항상 정상 동작.
 
 LAN 스마트폰 접속을 전제로 하므로 Flask는 `host="0.0.0.0"`으로 바인딩해야 한다. `cert.pem`/`key.pem`(자체 서명 인증서)이 route-optimizer/ 폴더에 있으면 HTTPS로 실행된다(`https://192.168.x.x:5000`). GPS 기능은 HTTPS 필수.
 

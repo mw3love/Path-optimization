@@ -66,6 +66,14 @@ def set_public(db, location_id, is_public: bool) -> None:
     db.commit()
 
 
+def set_name(db, location_id, name: str) -> None:
+    db.execute(
+        "UPDATE locations SET name = ? WHERE id = ?",
+        (name, location_id),
+    )
+    db.commit()
+
+
 def list_shares(db, location_id) -> list:
     rows = db.execute(
         "SELECT shared_with_email FROM location_shares WHERE location_id = ?",
