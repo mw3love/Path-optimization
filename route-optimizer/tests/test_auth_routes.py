@@ -71,3 +71,15 @@ def test_logout_clears_session(client, capsys):
 def test_protected_api_requires_login(client):
     resp = client.get("/api/locations")
     assert resp.status_code == 401
+
+
+def test_skip_login_env_auto_logs_in(client, monkeypatch):
+    monkeypatch.setenv("SKIP_LOGIN", "1")
+    resp = client.get("/api/session")
+    assert resp.get_json()["email"] is not None
+
+
+def test_skip_login_env_bypasses_protected_api(client, monkeypatch):
+    monkeypatch.setenv("SKIP_LOGIN", "1")
+    resp = client.get("/api/locations")
+    assert resp.status_code == 200

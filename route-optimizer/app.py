@@ -144,10 +144,16 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 init_db()
 
 
+SKIP_LOGIN_EMAIL = os.environ.get("SKIP_LOGIN_EMAIL", "dev@localhost")
+
+
 @app.before_request
 def _open_db():
     from flask import g
     g.db = get_connection()
+    if os.environ.get("SKIP_LOGIN") == "1" and "user_email" not in session:
+        session["user_email"] = SKIP_LOGIN_EMAIL
+        session["user_id"] = auth.get_or_create_user(g.db, SKIP_LOGIN_EMAIL)
 
 
 @app.teardown_appcontext
