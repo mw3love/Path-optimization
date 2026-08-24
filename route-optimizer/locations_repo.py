@@ -41,3 +41,14 @@ def set_name(db, location_id, name: str) -> None:
         (name, location_id),
     )
     db.commit()
+
+
+def delete_location(db, location_id) -> None:
+    db.execute("DELETE FROM locations WHERE id = ?", (location_id,))
+    db.commit()
+
+
+def delete_all_locations(db, user_id) -> int:
+    cur = db.execute("DELETE FROM locations WHERE owner_user_id = ?", (user_id,))
+    db.commit()
+    return cur.rowcount

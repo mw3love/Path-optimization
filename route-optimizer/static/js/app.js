@@ -5,7 +5,7 @@ import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
          onMarkerClick, invalidateMobileMapSize,
          enableBoxSelect, onBoxSelect } from "./map.js";
-import { initSelection, clearSelection, selectByIds, refreshLocationList, clearRouteOrder, refreshAnchorBadges } from "./selection.js";
+import { initSelection, clearSelection, selectByIds, refreshLocationList, clearRouteOrder, refreshAnchorBadges, deleteAllLocations } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
 import { fetchLocations, logout } from "./auth.js";
@@ -338,6 +338,11 @@ function resetAll() {
 ["btn-reset", "btn-reset-m"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("click", resetAll);
+});
+
+["btn-delete-all", "btn-delete-all-m"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", () => deleteAllLocations());
 });
 
 // ── 최적화 버튼 ───────────────────────────────────────────────────────────────

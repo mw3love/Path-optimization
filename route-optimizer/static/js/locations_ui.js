@@ -72,50 +72,78 @@ async function _addLocation({ name, address, lat, lng, source }) {
   _onLocationAdded(newLoc);
 }
 
-function _renderCoordResult(box, input, coord) {
+function _renderCoordResult(box, coord, { onConfirm, onHover }) {
   box.innerHTML = "";
   const div = document.createElement("div");
   div.className = "result-item";
   div.textContent = `📍 ${_coordLabel(coord.lat, coord.lng)} 여기에 추가`;
-  div.addEventListener("click", () => {
-    box.innerHTML = "";
-    input.value = "";
-    _addLocation({ name: _coordLabel(coord.lat, coord.lng), lat: coord.lat, lng: coord.lng, source: "paste" });
-  });
+  div.addEventListener("mouseenter", () => onHover(0));
+  div.addEventListener("click", () => onConfirm(0));
   box.appendChild(div);
 }
 
-function _renderSearchResults(box, input, results) {
+function _renderSearchResults(box, results, { onConfirm, onHover }) {
   box.innerHTML = "";
-  results.forEach((r) => {
+  results.forEach((r, i) => {
     const div = document.createElement("div");
     div.className = "result-item";
     div.textContent = `${r.name} — ${r.address}`;
-    div.addEventListener("click", () => {
-      box.innerHTML = "";
-      input.value = "";
-      _addLocation({ name: r.name, address: r.address, lat: r.lat, lng: r.lng, source: "geocode" });
-    });
+    div.addEventListener("mouseenter", () => onHover(i));
+    div.addEventListener("click", () => onConfirm(i));
     box.appendChild(div);
   });
 }
 
+// 검색창 키보드 조작: 좌표는 결과가 하나뿐이라 렌더 즉시 활성화해 Enter만으로 확정되고,
+// 주소는 여러 후보가 나올 수 있어 방향키로 명시적으로 하나를 짚어야 Enter가 먹는다
+// (지점 삭제 기능이 있어도 오검색으로 엉뚱한 곳이 조용히 추가되는 걸 막기 위함).
 function _bindSearch(inputId, resultsId) {
   const input = _el(inputId);
   const box = _el(resultsId);
   if (!input || !box) return;
+
+  let items = []; // { type: "coord" | "address", data }[]
+  let activeIndex = -1;
+
+  function setActive(idx) {
+    activeIndex = idx;
+    box.querySelectorAll(".result-item").forEach((el, i) => {
+      el.classList.toggle("active", i === activeIndex);
+    });
+  }
+
+  function clearResults() {
+    box.innerHTML = "";
+    items = [];
+    activeIndex = -1;
+  }
+
+  function confirmIndex(idx) {
+    const item = items[idx];
+    if (!item) return;
+    clearResults();
+    input.value = "";
+    if (item.type === "coord") {
+      _addLocation({ name: _coordLabel(item.data.lat, item.data.lng), lat: item.data.lat, lng: item.data.lng, source: "paste" });
+    } else {
+      _addLocation({ name: item.data.name, address: item.data.address, lat: item.data.lat, lng: item.data.lng, source: "geocode" });
+    }
+  }
+
   input.addEventListener("input", (e) => {
     const q = e.target.value.trim();
     clearTimeout(_debounceTimer);
 
     const coord = _parseLatLng(q);
     if (coord) {
-      _renderCoordResult(box, input, coord);
+      items = [{ type: "coord", data: coord }];
+      _renderCoordResult(box, coord, { onConfirm: confirmIndex, onHover: setActive });
+      setActive(0);
       return;
     }
 
     if (q.length < 2) {
-      box.innerHTML = "";
+      clearResults();
       return;
     }
     _debounceTimer = setTimeout(async () => {
@@ -124,10 +152,31 @@ function _bindSearch(inputId, resultsId) {
       if (requestId !== _searchRequestId) return;
       if (error) {
         box.innerHTML = `<div class="text-muted small p-1">${error}</div>`;
+        items = [];
+        activeIndex = -1;
         return;
       }
-      _renderSearchResults(box, input, results);
+      items = results.map((r) => ({ type: "address", data: r }));
+      _renderSearchResults(box, results, { onConfirm: confirmIndex, onHover: setActive });
+      activeIndex = -1;
     }, 150);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (items.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive(Math.min(activeIndex + 1, items.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive(Math.max(activeIndex - 1, 0));
+    } else if (e.key === "Enter") {
+      if (activeIndex < 0) return;
+      e.preventDefault();
+      confirmIndex(activeIndex);
+    } else if (e.key === "Escape") {
+      clearResults();
+    }
   });
 }
 

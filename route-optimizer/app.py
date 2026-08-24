@@ -805,6 +805,24 @@ def api_locations_rename(location_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/locations/<int:location_id>", methods=["DELETE"])
+@auth.login_required
+def api_locations_delete(location_id):
+    from flask import g
+    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
+        return jsonify({"error": "본인 소유 지점만 관리할 수 있습니다"}), 403
+    locrepo.delete_location(g.db, location_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/locations", methods=["DELETE"])
+@auth.login_required
+def api_locations_delete_all():
+    from flask import g
+    deleted = locrepo.delete_all_locations(g.db, session["user_id"])
+    return jsonify({"ok": True, "deleted": deleted})
+
+
 @app.route("/api/geocode")
 @auth.login_required
 def api_geocode():

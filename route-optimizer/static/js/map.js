@@ -182,6 +182,15 @@ export function addLocationMarker(loc) {
   _addLocationMarker(loc);
 }
 
+// 지점 삭제 시 지도에서 마커를 제거
+export function removeLocationMarker(id) {
+  const entry = _markers[id];
+  if (!entry) return;
+  if (_map.hasLayer(entry.marker)) _map.removeLayer(entry.marker);
+  if (_mapMobile.hasLayer(entry.markerM)) _mapMobile.removeLayer(entry.markerM);
+  delete _markers[id];
+}
+
 // ── 마커 강조/해제 ────────────────────────────────────────────────────────────
 export function setMarkerSelected(id, selected) {
   const entry = _markers[id];

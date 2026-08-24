@@ -1,7 +1,7 @@
 /**
  * selection.js — 지점 목록 체크박스, 시군구 필터, 검색, 마커 ↔ 사이드바 양방향 동기화
  */
-import { getSigunguColor, setMarkerSelected, panToLocation, setLocationMarkerVisible } from "./map.js";
+import { getSigunguColor, setMarkerSelected, panToLocation, setLocationMarkerVisible, removeLocationMarker } from "./map.js";
 
 let _locations = [];
 let _state = null;
@@ -52,7 +52,9 @@ export function initSelection(locations, state, callbacks) {
 
 // ── 시군구 필터 ───────────────────────────────────────────────────────────────
 
-function _buildFilters() {
+// 시군구 필터 배지 DOM만 다시 그린다(체크박스 리스너 바인딩과 분리 — 전체삭제 등으로
+// 여러 번 호출돼도 정적 DOM 요소인 전체선택 체크박스에 리스너가 중복 등록되지 않게 한다).
+function _rebuildSigunguBadges() {
   _allSigungu = [...new Set(_locations.map(_filterKey))].sort();
   // 초기 상태: 전체 표시
   _allSigungu.forEach((sgg) => _activeFilters.add(sgg));
@@ -83,8 +85,12 @@ function _buildFilters() {
       container.appendChild(badge);
     }
   });
+}
 
-  // 장소 전체선택 체크박스
+function _buildFilters() {
+  _rebuildSigunguBadges();
+
+  // 장소 전체선택 체크박스 — 정적 DOM 요소라 한 번만 바인딩한다.
   ["cb-select-all", "cb-select-all-m"].forEach((id) => {
     const cb = document.getElementById(id);
     if (!cb) return;
@@ -253,6 +259,23 @@ function _setAsDestination(loc) {
   if (_callbacks.setDestinationFromLocation) _callbacks.setDestinationFromLocation(loc);
 }
 
+// 되돌릴 수 없는 삭제라 컨텍스트 메뉴 안에서도 확인을 한 번 거친다(옆 항목과의 오클릭 방지).
+async function _deleteLocation(loc) {
+  if (!confirm(`"${loc.name}" 지점을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  const resp = await fetch(`/api/locations/${loc.id}`, { method: "DELETE" }).catch(() => null);
+  if (!resp || !resp.ok) {
+    alert("삭제 실패");
+    return;
+  }
+  const idx = _locations.findIndex((l) => l.id === loc.id);
+  if (idx !== -1) _locations.splice(idx, 1);
+  _state.selected.delete(loc.id);
+  removeLocationMarker(loc.id);
+  clearRouteOrder();
+  _renderList();
+  _callbacks.updateSelectionSummary();
+}
+
 function _openPinMenu(loc, x, y, div) {
   _closePinMenu();
 
@@ -268,15 +291,16 @@ function _openPinMenu(loc, x, y, div) {
     }],
     ["출발지로 설정", () => _setAsOrigin(loc)],
     ["도착지로 설정", () => _setAsDestination(loc)],
+    ["삭제", () => _deleteLocation(loc), "ctx-menu-item-danger"],
   ];
 
   const ul = document.createElement("ul");
   ul.className = "list-unstyled mb-0";
-  items.forEach(([label, fn]) => {
+  items.forEach(([label, fn, extraClass]) => {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "ctx-menu-item";
+    btn.className = extraClass ? `ctx-menu-item ${extraClass}` : "ctx-menu-item";
     btn.textContent = label;
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -648,6 +672,26 @@ export function refreshLocationList(newLoc) {
 // 박스 선택 등 외부에서 ID 목록으로 선택
 export function selectByIds(ids) {
   ids.forEach((id) => _setSelected(id, true));
+}
+
+// 지점 전체삭제(초기화 버튼과 별개 — 저장된 지점 자체를 서버에서 지운다).
+export async function deleteAllLocations() {
+  if (_locations.length === 0) return;
+  if (!confirm(`지점 ${_locations.length}개를 모두 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  const resp = await fetch("/api/locations", { method: "DELETE" }).catch(() => null);
+  if (!resp || !resp.ok) {
+    alert("삭제 실패");
+    return;
+  }
+  _locations.forEach((loc) => removeLocationMarker(loc.id));
+  _locations.length = 0;
+  _state.selected.clear();
+  _activeFilters.clear();
+  _allSigungu = [];
+  clearRouteOrder();
+  _rebuildSigunguBadges();
+  _renderList();
+  _callbacks.updateSelectionSummary();
 }
 
 // 전체 선택 해제

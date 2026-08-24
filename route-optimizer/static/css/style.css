@@ -315,6 +315,13 @@ html, body {
   background: #f0f4ff;
 }
 
+.ctx-menu-item-danger {
+  color: #c62828;
+}
+.ctx-menu-item-danger:hover {
+  background: #fdecea;
+}
+
 /* ── 결과 패널 (데스크톱 오버레이) ───────────────────────── */
 
 #result-panel {
@@ -1068,5 +1075,10 @@ html, body {
 }
 .add-loc-search-results .result-item:hover {
   background: #f0f0f0;
+}
+.add-loc-search-results .result-item.active {
+  background: #e8f0fe;
+  outline: 1px solid #1a73e8;
+  outline-offset: -1px;
 }
 

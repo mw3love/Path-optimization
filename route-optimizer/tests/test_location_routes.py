@@ -130,3 +130,59 @@ def test_rename_rejects_empty_name(client, capsys):
     loc_id = resp.get_json()["id"]
     rename_resp = client.patch(f"/api/locations/{loc_id}/name", json={"name": "  "})
     assert rename_resp.status_code == 400
+
+
+def test_owner_can_delete_location(client, capsys):
+    _login(client, "a@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "우리집", "address": "서울", "lat": 37.5, "lng": 127.0, "source": "map_click",
+    })
+    loc_id = resp.get_json()["id"]
+    del_resp = client.delete(f"/api/locations/{loc_id}")
+    assert del_resp.status_code == 200
+
+    list_resp = client.get("/api/locations")
+    ids = [l["id"] for l in list_resp.get_json()["locations"]]
+    assert loc_id not in ids
+
+
+def test_non_owner_cannot_delete_location(client, capsys):
+    _login(client, "a@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "우리집", "address": "서울", "lat": 37.5, "lng": 127.0, "source": "map_click",
+    })
+    loc_id = resp.get_json()["id"]
+    client.post("/auth/logout")
+
+    _login(client, "b@company.com", capsys)
+    del_resp = client.delete(f"/api/locations/{loc_id}")
+    assert del_resp.status_code == 403
+
+
+def test_delete_all_only_removes_own_locations(client, capsys):
+    _login(client, "a@company.com", capsys)
+    client.post("/api/locations", json={
+        "name": "지점1", "address": "", "lat": 37.5, "lng": 127.0, "source": "map_click",
+    })
+    client.post("/api/locations", json={
+        "name": "지점2", "address": "", "lat": 37.6, "lng": 127.1, "source": "map_click",
+    })
+    client.post("/auth/logout")
+
+    _login(client, "b@company.com", capsys)
+    resp = client.post("/api/locations", json={
+        "name": "b의 지점", "address": "", "lat": 35.1, "lng": 129.0, "source": "map_click",
+    })
+    b_loc_id = resp.get_json()["id"]
+    client.post("/auth/logout")
+
+    _login(client, "a@company.com", capsys)
+    del_resp = client.delete("/api/locations")
+    assert del_resp.status_code == 200
+    assert del_resp.get_json()["deleted"] == 2
+    assert client.get("/api/locations").get_json()["locations"] == []
+
+    client.post("/auth/logout")
+    _login(client, "b@company.com", capsys)
+    ids = [l["id"] for l in client.get("/api/locations").get_json()["locations"]]
+    assert ids == [b_loc_id]
