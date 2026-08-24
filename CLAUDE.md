@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 현재 상태
 
-**구현 완료** (Step 0~4, 2026-04-17) + **사내 장소 공유 기능 추가** (2026-08-24: 매직링크 로그인, SQLite DB, 3단계 공유 권한, 카카오 지오코딩). 실 기기 E2E 테스트(스마트폰 LAN) 일부 미검증. 지점 삭제 UI는 아직 없음.
+**구현 완료** (Step 0~4, 2026-04-17) + **사내 다중 사용자 전환** (2026-08-24: 매직링크 로그인, SQLite DB, 카카오 지오코딩). 지점 공유/전체공개 기능은 2026-08-25 제거 — 지점은 소유자 본인에게만 보임(완전 개인화). 실 기기 E2E 테스트(스마트폰 LAN) 일부 미검증. 지점 삭제 UI는 아직 없음.
 
 ## 프로젝트 개요
 
 **차량 방문 경로 최적화 웹앱.** KBS 라디오 전파 측정용으로 시작했으나 목적 종료 후 사내 개인/출장 경로 계획 도구로 전환됨. 지도에서 방문할 지점을 선택 → OR-Tools로 방문 순서 최적화 → 타임라인 확인.
 
-- 사용 환경: 사내 이메일 매직링크 로그인 기반 다중 사용자(회사 전체 대상). 서버는 Flask 단일 프로세스.
-- 장소 데이터는 SQLite DB(`app.db`)에 저장. 사용자가 웹에서 직접 추가하며 기본 비공개 → 이메일 지정 공유 → 전체공개 3단계 권한. **지역/지점 하드코딩 금지**.
+- 사용 환경: 사내 이메일 매직링크 로그인 기반 다중 사용자(회사 전체 누구나 로그인 가능, 각자 계정). 서버는 Flask 단일 프로세스.
+- 장소 데이터는 SQLite DB(`app.db`)에 저장. 사용자가 웹에서 직접 추가하며 **본인에게만 보임**(공유/전체공개 기능 없음). **지역/지점 하드코딩 금지**.
 
 ## 실행 / 개발 명령
 
@@ -52,7 +52,6 @@ route-optimizer/
         ├── map.js           # Leaflet 초기화, 마커, 우클릭/롱프레스 메뉴
         ├── selection.js     # 지점 목록 ↔ 지도 양방향 동기화, 필터/검색
         ├── locations_ui.js  # 장소 추가 모달 (검색/GPS/지도클릭)
-        ├── sharing_ui.js    # 공유 대상 관리 + 전체공개 토글
         ├── optimize.js      # /api/optimize 호출 + 결과 렌더
         ├── timeline.js      # 타임라인 패널 + 번호 DivIcon
         ├── multiday.js      # N일 경로 계획 UI
@@ -61,11 +60,11 @@ route-optimizer/
 
 ### 상태 저장 모델 — **SQLite (`app.db`)**
 정적 `locations.json`은 폐기됨(2026-08-24). 서버 상태:
-- `db.py`의 SQLite DB(`route-optimizer/app.db`, gitignore 대상) — `users`/`locations`/`location_shares`/`auth_tokens` 테이블.
-- 지점 가시성: 소유자 본인 OR `is_public=1` OR 내 이메일이 `location_shares`에 있음 (`locations_repo.list_visible_locations`).
+- `db.py`의 SQLite DB(`route-optimizer/app.db`, gitignore 대상) — `users`/`locations`/`auth_tokens` 테이블.
+- 지점 가시성: 소유자 본인만(`locations_repo.list_visible_locations`) — 공유/전체공개 기능 없음(2026-08-25 제거).
 - `DISTANCE_MATRIX_CACHE`: 최적화 요청 때 필요한 지점들의 OSRM Table을 계산해 프로세스 메모리에 캐시(정적 지점 목록 프리페치는 더 이상 없음 — `prefetch.py` 삭제됨).
 
-방문 상태/메모/이력은 여전히 저장하지 않는다. 지점 **삭제** UI는 아직 없음(추가/공유만 가능). 기능 추가 전 PRD 하단 "구현 변경사항"·"추가 확장 기능" 섹션을 먼저 확인.
+방문 상태/메모/이력은 여전히 저장하지 않는다. 지점 **삭제** UI는 아직 없음(추가만 가능). 기능 추가 전 PRD 하단 "구현 변경사항"·"추가 확장 기능" 섹션을 먼저 확인.
 
 ### 최적화 흐름
 1. 프론트가 `POST /api/optimize`에 `location_ids[]`, `start{lat,lng,label}`, `end`(nullable), `start_time`, `stay_minutes` 전송.
@@ -97,6 +96,6 @@ route-optimizer/
 
 ## 코딩 지침
 
-- `locations` 테이블 스키마: `{id, owner_user_id, name, address, lat, lng, source, sigungu, is_public, created_at}`. `sigungu`는 시군구 색상 키(값 없으면 "기타"로 묶임). `source`는 `geocode`/`gps`/`map_click` 중 하나.
+- `locations` 테이블 스키마: `{id, owner_user_id, name, address, lat, lng, source, sigungu, created_at}`. `sigungu`는 시군구 색상 키(값 없으면 "기타"로 묶임). `source`는 `geocode`/`gps`/`map_click` 중 하나.
 - OR-Tools 해는 20개 이하에서 1초 내 최적해가 목표. 탐색 전략을 바꿀 때는 이 성능 목표를 깨지 말 것.
 - 오차 허용: OSRM 기반 총 시간은 실제 대비 10~30% 오차 허용(검증 기준 5번). 방문 **순서**가 맞는 것이 우선.

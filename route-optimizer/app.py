@@ -207,7 +207,7 @@ def optimize():
     # ── 좌표 목록 구성 ──────────────────────────────────────────────────────
     # 인덱스: 0=출발지, 1..n=선택 지점, n+1=도착지(있을 때)
     from flask import g
-    loc_map = _visible_loc_map(g.db, session["user_id"], session["user_email"])
+    loc_map = _visible_loc_map(g.db, session["user_id"])
 
     coords = [(start["lat"], start["lng"])]
     keys = ["__start__"]
@@ -349,9 +349,9 @@ def _build_polyline(keys, ordered_ids, coords, start, end):
     return [[lat, lng] for lat, lng in route_coords]
 
 
-def _visible_loc_map(db, user_id, user_email) -> dict:
+def _visible_loc_map(db, user_id) -> dict:
     """현재 사용자가 볼 수 있는 지점만 {str(id): dict} 형태로 반환."""
-    rows = locrepo.list_visible_locations(db, user_id, user_email)
+    rows = locrepo.list_visible_locations(db, user_id)
     return {str(r["id"]): r for r in rows}
 
 
@@ -411,7 +411,7 @@ def optimize_multiday():
 
     # ── 좌표/키 목록 구성 ──────────────────────────────────────────────────
     from flask import g
-    loc_map = _visible_loc_map(g.db, session["user_id"], session["user_email"])
+    loc_map = _visible_loc_map(g.db, session["user_id"])
 
     # 검증: 모든 지점 id 존재 여부
     for lid in location_ids:
@@ -598,7 +598,7 @@ def estimate_days():
         work_minutes = 540
 
     from flask import g
-    loc_map = _visible_loc_map(g.db, session["user_id"], session["user_email"])
+    loc_map = _visible_loc_map(g.db, session["user_id"])
     for lid in location_ids:
         if lid not in loc_map:
             return jsonify({"error": f"알 수 없는 지점 id: {lid}"}), 400
@@ -741,14 +741,12 @@ def api_session():
 
 # ── 지점 라우트 ──────────────────────────────────────────────────────────────────
 
-def _serialize_location(row, db, user_id):
+def _serialize_location(row):
     """프론트가 실제로 쓰는 필드만 응답에 포함한다.
 
     owner_user_id/created_at은 노출하지 않는다(다른 사용자의 내부 id 유출 방지).
-    shares는 본인 소유 지점에 한해서만 채운다(비소유자에게 공유 목록을 노출하지 않기 위함).
     """
-    is_owner = row["owner_user_id"] == user_id
-    out = {
+    return {
         "id": row["id"],
         "name": row["name"],
         "address": row["address"],
@@ -756,18 +754,15 @@ def _serialize_location(row, db, user_id):
         "lng": row["lng"],
         "source": row["source"],
         "sigungu": row["sigungu"],
-        "is_public": bool(row["is_public"]),
-        "shares": locrepo.list_shares(db, row["id"]) if is_owner else [],
     }
-    return out
 
 
 @app.route("/api/locations", methods=["GET"])
 @auth.login_required
 def api_locations_list():
     from flask import g
-    rows = locrepo.list_visible_locations(g.db, session["user_id"], session["user_email"])
-    locations = [_serialize_location(r, g.db, session["user_id"]) for r in rows]
+    rows = locrepo.list_visible_locations(g.db, session["user_id"])
+    locations = [_serialize_location(r) for r in rows]
     return jsonify({"locations": locations})
 
 
@@ -794,41 +789,6 @@ def api_locations_create():
         g.db, session["user_id"], name, body.get("address", ""), lat, lng, source, sigungu
     )
     return jsonify({"id": loc_id}), 201
-
-
-@app.route("/api/locations/<int:location_id>/share", methods=["POST"])
-@auth.login_required
-def api_locations_share(location_id):
-    from flask import g
-    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
-        return jsonify({"error": "본인 소유 지점만 공유할 수 있습니다"}), 403
-    body = request.get_json(force=True) or {}
-    email = (body.get("email") or "").strip().lower()
-    if not email or "@" not in email:
-        return jsonify({"error": "올바른 이메일을 입력하세요"}), 400
-    locrepo.add_share(g.db, location_id, email)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/locations/<int:location_id>/share/<string:email>", methods=["DELETE"])
-@auth.login_required
-def api_locations_unshare(location_id, email):
-    from flask import g
-    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
-        return jsonify({"error": "본인 소유 지점만 관리할 수 있습니다"}), 403
-    locrepo.remove_share(g.db, location_id, email.strip().lower())
-    return jsonify({"ok": True})
-
-
-@app.route("/api/locations/<int:location_id>/visibility", methods=["PATCH"])
-@auth.login_required
-def api_locations_visibility(location_id):
-    from flask import g
-    if not locrepo.is_owner(g.db, location_id, session["user_id"]):
-        return jsonify({"error": "본인 소유 지점만 관리할 수 있습니다"}), 403
-    body = request.get_json(force=True) or {}
-    locrepo.set_public(g.db, location_id, bool(body.get("is_public")))
-    return jsonify({"ok": True})
 
 
 @app.route("/api/locations/<int:location_id>/name", methods=["PATCH"])

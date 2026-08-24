@@ -17,7 +17,7 @@ def test_init_db_creates_tables():
             ).fetchall()
         }
         conn.close()
-        assert {"users", "locations", "location_shares", "auth_tokens"} <= tables
+        assert {"users", "locations", "auth_tokens"} <= tables
 
 
 def test_get_connection_returns_row_factory():

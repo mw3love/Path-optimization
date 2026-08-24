@@ -22,14 +22,7 @@ CREATE TABLE IF NOT EXISTS locations (
     lng REAL NOT NULL,
     source TEXT NOT NULL,
     sigungu TEXT NOT NULL DEFAULT '',
-    is_public INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS location_shares (
-    location_id INTEGER NOT NULL REFERENCES locations(id),
-    shared_with_email TEXT NOT NULL,
-    PRIMARY KEY (location_id, shared_with_email)
 );
 
 CREATE TABLE IF NOT EXISTS auth_tokens (
