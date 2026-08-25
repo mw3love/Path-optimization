@@ -4,7 +4,7 @@
 import { initMaps, setOriginMarker, setDestMarker,
          clearDestMarker, clearOriginMarker, clearResultLayers,
          onMarkerClick, invalidateMobileMapSize,
-         enableBoxSelect, onBoxSelect } from "./map.js";
+         enableBoxSelect, onBoxSelect, setGpsMarker } from "./map.js";
 import { initSelection, clearSelection, selectByIds, refreshLocationList, clearRouteOrder, refreshAnchorBadges, deleteAllLocations } from "./selection.js";
 import { initOptimize } from "./optimize.js";
 import { initMultiday } from "./multiday.js";
@@ -72,16 +72,26 @@ const ctxSetOrigin = document.getElementById("ctx-set-origin");
 const ctxSetDest = document.getElementById("ctx-set-dest");
 
 let _pendingCtxLatLng = null;
+let _pendingCtxLabel = LABEL_MAP_SELECTED;
 
 // 롱프레스로 메뉴가 방금 열렸을 때, 손을 떼는 touchend가 즉시 닫지 않도록 방지
 let _ctxJustShown = false;
 
-function showContextMenu(latlng, pageX, pageY) {
+// opts.label — 출발지/도착지로 설정할 때 붙일 라벨(GPS 마커에서 열면 LABEL_GPS_SELECTED).
+// opts.hideAddLocation — GPS 마커 전용 메뉴에선 "이 장소 추가" 항목을 숨긴다(범위 밖 기능).
+function showContextMenu(latlng, pageX, pageY, opts = {}) {
   _pendingCtxLatLng = latlng;
+  _pendingCtxLabel = opts.label || LABEL_MAP_SELECTED;
   ctxMenu.style.left = `${pageX}px`;
   ctxMenu.style.top  = `${pageY}px`;
+  document.getElementById("ctx-add-location")?.classList.toggle("d-none", !!opts.hideAddLocation);
   ctxMenu.classList.remove("d-none");
   _ctxJustShown = true;
+}
+
+// GPS 현재 위치 마커를 우클릭했을 때(map.js의 setGpsMarker onContextMenu 콜백).
+function _onGpsPinContextMenu(latlng, pageX, pageY) {
+  showContextMenu(latlng, pageX, pageY, { label: LABEL_GPS_SELECTED, hideAddLocation: true });
 }
 
 function hideContextMenu() {
@@ -100,7 +110,7 @@ ctxMenu.addEventListener("touchend", (e) => e.stopPropagation());
 
 ctxSetOrigin.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
-  _setOrigin({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED });
+  _setOrigin({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: _pendingCtxLabel });
   setOriginMarker(_pendingCtxLatLng, _clearOrigin);
   updateOriginLabel();
   updateOptimizeButton();
@@ -113,7 +123,7 @@ ctxSetOrigin.addEventListener("click", () => {
 
 ctxSetDest.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
-  _setDestination({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: LABEL_MAP_SELECTED });
+  _setDestination({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: _pendingCtxLabel });
   setDestMarker(_pendingCtxLatLng, _clearDest);
   updateDestLabel();
   hideContextMenu();
@@ -144,14 +154,9 @@ function setupGpsButton(btnId) {
       (pos) => {
         btn.disabled = false;
         btn.textContent = "📍";
-        _setOrigin({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          label: LABEL_GPS_SELECTED,
-        });
-        setOriginMarker({ lat: state.origin.lat, lng: state.origin.lng }, _clearOrigin);
-        updateOriginLabel();
-        updateOptimizeButton();
+        // 출발/도착지로 자동 지정하지 않는다 — 지도 위 현재 위치 마커만 찍고,
+        // 그 마커를 우클릭해 "출발지로 설정"/"도착지로 설정"을 직접 고르게 한다.
+        setGpsMarker({ lat: pos.coords.latitude, lng: pos.coords.longitude }, _onGpsPinContextMenu);
       },
       (err) => {
         btn.disabled = false;
@@ -382,15 +387,11 @@ function _requestCurrentLocation() {
   });
 }
 
+// 출발/도착지로 자동 지정하지 않는다 — 새로고침 시 좌패널은 완전히 빈 상태로
+// 시작하고, 지도 위 현재 위치 마커를 우클릭해야 출발/도착지로 반영된다.
 function _applyCurrentLocation(coord) {
   if (!coord) return;
-  _setOrigin({ ...coord });
-  _setDestination({ ...coord });
-  setOriginMarker({ lat: coord.lat, lng: coord.lng }, _clearOrigin);
-  setDestMarker({ lat: coord.lat, lng: coord.lng }, _clearDest);
-  updateOriginLabel();
-  updateDestLabel();
-  updateOptimizeButton();
+  setGpsMarker({ lat: coord.lat, lng: coord.lng }, _onGpsPinContextMenu);
 }
 
 // ── 초기화 (비동기: 지점 목록을 먼저 받아온 뒤 지도/선택/최적화 모듈을 구성) ──

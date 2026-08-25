@@ -24,7 +24,7 @@ def search(query: str) -> list:
 def _search_kakao(query: str) -> list:
     resp = requests.get(
         KAKAO_SEARCH_URL,
-        params={"query": query, "size": 8},
+        params={"query": query, "size": 15},  # 카카오 키워드 검색 size 파라미터의 단일 요청 상한
         headers={"Authorization": f"KakaoAK {KAKAO_API_KEY}"},
         timeout=TIMEOUT,
     )
@@ -44,7 +44,7 @@ def _search_kakao(query: str) -> list:
 def _search_nominatim(query: str) -> list:
     resp = requests.get(
         NOMINATIM_URL,
-        params={"q": query, "format": "json", "limit": 8},
+        params={"q": query, "format": "json", "limit": 40},  # Nominatim limit 파라미터의 상한(v4.2+)
         headers={"User-Agent": NOMINATIM_USER_AGENT},
         timeout=TIMEOUT,
     )

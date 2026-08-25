@@ -109,6 +109,8 @@ function _bindSearch(inputId, resultsId) {
     activeIndex = idx;
     box.querySelectorAll(".result-item").forEach((el, i) => {
       el.classList.toggle("active", i === activeIndex);
+      // 방향키로 목록 끝까지 훑을 수 있게, 활성 항목이 스크롤 영역 밖이면 따라가며 스크롤한다.
+      if (i === activeIndex) el.scrollIntoView({ block: "nearest" });
     });
   }
 

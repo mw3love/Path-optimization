@@ -244,6 +244,7 @@ function _pinIcon(color, label, fontSize) {
 
 const _originIcon = _pinIcon("#34a853", "1", "14px");
 const _destIcon    = _pinIcon("#ea8600", "🏁", "13px");
+const _gpsIcon     = _pinIcon("#4285f4", "📍", "13px");
 
 export function setOriginMarker(latlng) {
   [_originMarker, _originMarkerM].forEach((m) => m && m.remove());
@@ -269,6 +270,36 @@ export function clearOriginMarker() {
   [_originMarker, _originMarkerM].forEach((m) => m && m.remove());
   _originMarker = null;
   _originMarkerM = null;
+}
+
+// ── GPS 현재 위치 마커 ────────────────────────────────────────────────────────
+// GPS는 출발/도착지를 자동으로 지정하지 않고 이 마커만 찍는다 — 사용자가
+// 우클릭으로 직접 "출발지로 설정"/"도착지로 설정"을 골라야 좌패널에 반영된다.
+let _gpsMarker  = null;
+let _gpsMarkerM = null;
+
+// onContextMenu(latlng, pageX, pageY) — 마커 우클릭 시 호출.
+// stopPropagation으로 지도 자체의 빈 공간 우클릭 핸들러(마우스 커서 픽셀을
+// 위경도로 역산해 부정확함)로 새지 않게 막고, 마커에 저장된 정확한 좌표를 그대로 넘긴다.
+export function setGpsMarker(latlng, onContextMenu) {
+  [_gpsMarker, _gpsMarkerM].forEach((m) => m && m.remove());
+  _gpsMarker  = L.marker(latlng, { icon: _gpsIcon }).addTo(_map).bindPopup("현재 위치");
+  _gpsMarkerM = L.marker(latlng, { icon: _gpsIcon }).addTo(_mapMobile).bindPopup("현재 위치");
+  [_gpsMarker, _gpsMarkerM].forEach((m) => {
+    m.on("contextmenu", (e) => {
+      e.originalEvent.preventDefault();
+      e.originalEvent.stopPropagation();
+      if (onContextMenu) onContextMenu(latlng, e.originalEvent.pageX, e.originalEvent.pageY);
+    });
+  });
+  _map.flyTo(latlng, Math.max(_map.getZoom(), 13));
+  _mapMobile.flyTo(latlng, Math.max(_mapMobile.getZoom(), 13));
+}
+
+export function clearGpsMarker() {
+  [_gpsMarker, _gpsMarkerM].forEach((m) => m && m.remove());
+  _gpsMarker = null;
+  _gpsMarkerM = null;
 }
 
 // ── 결과 마커/경로선 ──────────────────────────────────────────────────────────
