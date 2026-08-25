@@ -254,6 +254,19 @@ html, body {
 .loc-anchor-badge.badge-origin { background: #34a853; }
 .loc-anchor-badge.badge-dest   { background: #ea8600; }
 
+/* 저장되지 않은(임시) 출발/도착지 가상 행 — 선택 가능한 지점이 아니므로 클릭 커서를
+   없애 일반 지점 행과 구분한다(배경색은 .is-origin/.is-destination이 그대로 처리). */
+.location-item.anchor-row {
+  cursor: default;
+}
+.anchor-clear-btn {
+  flex-shrink: 0;
+  color: #888;
+}
+.anchor-clear-btn:hover {
+  color: #333;
+}
+
 .location-item .loc-name {
   font-weight: 500;
   white-space: nowrap;

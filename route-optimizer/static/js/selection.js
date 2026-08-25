@@ -358,14 +358,63 @@ function _renderList() {
     if (!container) return;
     container.innerHTML = "";
 
+    // 저장된 지점과 좌표가 일치하지 않는 출발/도착지(GPS·지도클릭 등 임시 좌표)는
+    // DB에 남기지 않고 이 세션 동안만 목록 맨 위/맨 아래에 가상 행으로 보여준다.
+    if (_state.origin && !originLoc) {
+      container.appendChild(_createAnchorRow("origin"));
+    }
     for (const { loc, role } of rows) {
       const item = _createListItem(loc, role);
       container.appendChild(item);
+    }
+    if (_state.destination && !destLoc) {
+      container.appendChild(_createAnchorRow("destination"));
     }
   });
 
   _syncSelectAllCheckbox();
   _refreshRouteBadges();
+}
+
+// 저장되지 않은(임시) 출발지/도착지를 나타내는 가상 목록 행 — 실제 지점(_locations)이
+// 아니므로 체크박스·드래그·이름수정·삭제 같은 지점 전용 동작 없이 해제 버튼만 둔다.
+function _createAnchorRow(role) {
+  const isOrigin = role === "origin";
+  const anchor = isOrigin ? _state.origin : _state.destination;
+
+  const div = document.createElement("div");
+  div.className = `location-item anchor-row ${isOrigin ? "is-origin" : "is-destination"}`;
+
+  const badge = document.createElement("span");
+  badge.className = `loc-anchor-badge ${isOrigin ? "badge-origin" : "badge-dest"}`;
+  badge.textContent = isOrigin ? "1" : "🏁";
+
+  const info = document.createElement("div");
+  info.style.overflow = "hidden";
+  const nameEl = document.createElement("div");
+  nameEl.className = "loc-name";
+  nameEl.textContent = isOrigin ? "출발지" : "도착지";
+  const coordEl = document.createElement("div");
+  coordEl.className = "loc-sub loc-coord";
+  coordEl.textContent = `${anchor.label} (${anchor.lat.toFixed(5)}, ${anchor.lng.toFixed(5)})`;
+  info.appendChild(nameEl);
+  info.appendChild(coordEl);
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "btn btn-link btn-sm p-0 anchor-clear-btn";
+  clearBtn.title = isOrigin ? "출발지 해제" : "도착지 해제";
+  clearBtn.textContent = "✕";
+  clearBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (isOrigin) _callbacks.clearOrigin?.();
+    else _callbacks.clearDestination?.();
+  });
+
+  div.appendChild(badge);
+  div.appendChild(info);
+  div.appendChild(clearBtn);
+  return div;
 }
 
 // 더블클릭으로 이름 수정(좌표만 있는 지점에 이름을 붙일 때 주로 사용)

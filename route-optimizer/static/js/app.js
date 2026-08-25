@@ -42,28 +42,24 @@ function _setDestination(dest) {
 function _clearOrigin() {
   _setOrigin(null);
   clearOriginMarker();
-  updateOriginLabel();
   updateOptimizeButton();
 }
 
 function _clearDest() {
   _setDestination(null);
   clearDestMarker();
-  updateDestLabel();
 }
 
 // 좌패널 지점을 출발지/도착지로 설정할 때 selection.js가 호출(우클릭 메뉴와 동일 로직).
 function _setOriginFromLocation(loc) {
   _setOrigin({ lat: loc.lat, lng: loc.lng, label: loc.name });
   setOriginMarker({ lat: loc.lat, lng: loc.lng }, _clearOrigin);
-  updateOriginLabel();
   updateOptimizeButton();
 }
 
 function _setDestinationFromLocation(loc) {
   _setDestination({ lat: loc.lat, lng: loc.lng, label: loc.name });
   setDestMarker({ lat: loc.lat, lng: loc.lng }, _clearDest);
-  updateDestLabel();
 }
 
 // ── 컨텍스트 메뉴 ─────────────────────────────────────────────────────────────
@@ -112,7 +108,6 @@ ctxSetOrigin.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
   _setOrigin({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: _pendingCtxLabel });
   setOriginMarker(_pendingCtxLatLng, _clearOrigin);
-  updateOriginLabel();
   updateOptimizeButton();
   hideContextMenu();
   // 모바일: 출발지 설정 후 목록 탭으로 자동 복귀
@@ -125,7 +120,6 @@ ctxSetDest.addEventListener("click", () => {
   if (!_pendingCtxLatLng) return;
   _setDestination({ lat: _pendingCtxLatLng.lat, lng: _pendingCtxLatLng.lng, label: _pendingCtxLabel });
   setDestMarker(_pendingCtxLatLng, _clearDest);
-  updateDestLabel();
   hideContextMenu();
   // 모바일: 도착지 설정 후 목록 탭으로 자동 복귀
   if (window.innerWidth < 768) {
@@ -218,54 +212,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ── 출발지/도착지 사이드바 버튼 ──────────────────────────────────────────────
-["btn-clear-origin", "btn-clear-origin-m"].forEach((id) => {
-  const btn = document.getElementById(id);
-  if (btn) btn.addEventListener("click", _clearOrigin);
-});
-
-["btn-clear-dest", "btn-clear-dest-m"].forEach((id) => {
-  const btn = document.getElementById(id);
-  if (btn) btn.addEventListener("click", _clearDest);
-});
-
-// ── 라벨 업데이트 ─────────────────────────────────────────────────────────────
-const COORD_LABELS = new Set([LABEL_MAP_SELECTED, LABEL_GPS_SELECTED]);
-function _fmtCoord(o) {
-  return COORD_LABELS.has(o.label)
-    ? `${o.label} (${o.lat.toFixed(5)}, ${o.lng.toFixed(5)})`
-    : o.label;
-}
-
-export function updateOriginLabel() {
-  const text = state.origin
-    ? `출발지: ${_fmtCoord(state.origin)}`
-    : "출발지: 미지정";
-  document.getElementById("label-origin").textContent = text;
-  const m = document.getElementById("label-origin-m");
-  if (m) m.textContent = text;
-  const show = !!state.origin;
-  ["btn-clear-origin", "btn-clear-origin-m"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle("d-none", !show);
-  });
-}
-
-export function updateDestLabel() {
-  const text = state.destination
-    ? `도착지: ${_fmtCoord(state.destination)}`
-    : "도착지: 미지정";
-  ["label-destination", "label-destination-m"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  });
-  const show = !!state.destination;
-  ["btn-clear-dest", "btn-clear-dest-m"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle("d-none", !show);
-  });
-}
-
 export function updateOptimizeButton() {
   const enabled = state.selected.size >= 2 && !!state.origin;
   ["btn-optimize", "btn-optimize-m", "btn-fixed-order", "btn-fixed-order-m"].forEach((id) => {
@@ -335,8 +281,6 @@ function resetAll() {
   // multiday 결과 패널 숨김
   const mdPanel = document.getElementById("multiday-result-panel");
   if (mdPanel) mdPanel.classList.add("d-none");
-  updateOriginLabel();
-  updateDestLabel();
   updateSelectionSummary();
 }
 
@@ -414,6 +358,8 @@ async function _init() {
     updateOptimizeButton,
     setOriginFromLocation: _setOriginFromLocation,
     setDestinationFromLocation: _setDestinationFromLocation,
+    clearOrigin: _clearOrigin,
+    clearDestination: _clearDest,
   });
   // initSelection이 기본적으로 전체 지점을 선택 상태로 채우므로, 정적 템플릿의
   // "선택: 0개"/버튼 disabled 기본값을 실제 상태로 갱신해야 한다.

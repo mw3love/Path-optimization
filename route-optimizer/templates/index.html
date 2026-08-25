@@ -44,16 +44,6 @@
         </div>
       </div>
 
-      <!-- 출발지/도착지 표시 -->
-      <div class="small text-muted mb-1 d-flex align-items-center gap-1">
-        <span id="label-origin" class="flex-grow-1">출발지: 미지정</span>
-        <button id="btn-clear-origin" class="btn btn-link btn-sm p-0 d-none">✕</button>
-      </div>
-      <div class="small text-muted mb-2 d-flex align-items-center gap-1">
-        <span id="label-destination" class="flex-grow-1">도착지: 미지정</span>
-        <button id="btn-clear-dest" class="btn btn-link btn-sm p-0 d-none">✕</button>
-      </div>
-
       <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
       <div id="sigungu-filters" class="d-flex flex-wrap gap-1 mb-2"></div>
 
@@ -145,14 +135,6 @@
             <input type="number" id="stay-minutes-m" class="form-control form-control-sm"
               value="20" min="1" max="120" />
           </div>
-        </div>
-        <div class="small text-muted mb-1 d-flex align-items-center gap-1">
-          <span id="label-origin-m" class="flex-grow-1">출발지: 미지정</span>
-          <button id="btn-clear-origin-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
-        </div>
-        <div class="small text-muted mb-2 d-flex align-items-center gap-1">
-          <span id="label-destination-m" class="flex-grow-1">도착지: 미지정</span>
-          <button id="btn-clear-dest-m" class="btn btn-link btn-sm p-0 d-none">✕</button>
         </div>
         <!-- 시군구 필터 ("전체" 배지는 JS에서 주입) -->
         <div id="sigungu-filters-m" class="d-flex flex-wrap gap-1 mb-2"></div>
