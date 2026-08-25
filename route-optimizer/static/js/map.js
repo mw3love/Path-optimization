@@ -278,7 +278,38 @@ export function clearOriginMarker() {
 let _gpsMarker  = null;
 let _gpsMarkerM = null;
 
-// onContextMenu(latlng, pageX, pageY) — 마커 우클릭 시 호출.
+// 모바일 롱프레스: Leaflet 1.1.1은 touchstart를 _handleDOMEvent로 포워딩하지
+// 않아 map.on("touchstart", ...)/marker.on("touchstart", ...) 자체가 발화하지
+// 않는다(Playwright로 실측 확인 — 지도 레벨 _attachLongPress도 같은 이유로
+// 마커 위에서는 원래 동작하지 않았음). 그래서 마커 DOM 요소에 네이티브
+// addEventListener로 직접 붙인다 — 박스선택 캡처레이어(_attachBoxSelect)가
+// 쓰는 것과 같은 패턴.
+function _attachMarkerLongPress(marker, latlng, onContextMenu) {
+  const el = marker.getElement();
+  if (!el) return;
+  let timer = null;
+  let active = false;
+
+  el.addEventListener("touchstart", (e) => {
+    if (_boxSelectActive || e.touches.length !== 1) return;
+    active = false;
+    e.stopPropagation();
+    const touch = e.touches[0];
+    timer = setTimeout(() => {
+      active = true;
+      if (onContextMenu) onContextMenu(latlng, touch.pageX, touch.pageY);
+    }, 500);
+  });
+
+  el.addEventListener("touchmove", () => clearTimeout(timer));
+
+  el.addEventListener("touchend", (e) => {
+    clearTimeout(timer);
+    if (active) e.preventDefault();
+  });
+}
+
+// onContextMenu(latlng, pageX, pageY) — 마커 우클릭/롱프레스 시 호출.
 // stopPropagation으로 지도 자체의 빈 공간 우클릭 핸들러(마우스 커서 픽셀을
 // 위경도로 역산해 부정확함)로 새지 않게 막고, 마커에 저장된 정확한 좌표를 그대로 넘긴다.
 export function setGpsMarker(latlng, onContextMenu) {
@@ -291,6 +322,7 @@ export function setGpsMarker(latlng, onContextMenu) {
       e.originalEvent.stopPropagation();
       if (onContextMenu) onContextMenu(latlng, e.originalEvent.pageX, e.originalEvent.pageY);
     });
+    _attachMarkerLongPress(m, latlng, onContextMenu);
   });
   _map.flyTo(latlng, Math.max(_map.getZoom(), 13));
   _mapMobile.flyTo(latlng, Math.max(_mapMobile.getZoom(), 13));
