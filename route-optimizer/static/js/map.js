@@ -378,11 +378,16 @@ function _fireMarkerClick(id)    { _markerClickListeners.forEach((fn) => fn(id))
 function _fireMapClick(latlng)   { _mapClickListeners.forEach((fn) => fn(latlng)); }
 
 // ── 롱프레스 (모바일) ─────────────────────────────────────────────────────────
+// Leaflet 1.1.1은 touchstart/touchmove/touchend를 _handleDOMEvent로 포워딩하지
+// 않아 map.on("touchstart", ...)는 실제로 발화하지 않는다(Playwright 실측 확인 —
+// _attachMarkerLongPress와 같은 근본 원인). 그래서 지도 컨테이너에 네이티브
+// addEventListener로 직접 붙인다.
 function _attachLongPress(map) {
   let _longPressTimer  = null;
   let _longPressActive = false;
+  const container = map.getContainer();
 
-  map.on("touchstart", (e) => {
+  container.addEventListener("touchstart", (e) => {
     if (_boxSelectActive) return; // 박스 선택 모드일 때는 롱프레스 비활성
     _longPressActive = false;
     if (e.touches.length !== 1) return;
@@ -396,10 +401,11 @@ function _attachLongPress(map) {
     }, 500);
   });
 
-  map.on("touchend touchmove", () => clearTimeout(_longPressTimer));
+  container.addEventListener("touchmove", () => clearTimeout(_longPressTimer));
 
-  map.on("touchend", (e) => {
-    if (_longPressActive) e.originalEvent.preventDefault();
+  container.addEventListener("touchend", (e) => {
+    clearTimeout(_longPressTimer);
+    if (_longPressActive) e.preventDefault();
   });
 }
 
